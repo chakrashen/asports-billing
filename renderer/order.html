@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Order — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/invoice.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <div class="app-container">
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back to Home">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">shopping_cart</span>
+          <div>
+            <h1 class="header__title">Create Order</h1>
+            <p class="header__subtitle">Purchase Order</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <main class="invoice-main">
+      <section class="section customer-section">
+        <div class="section__header">
+          <div class="section__header-left">
+            <span class="material-icons-round section__icon">store</span>
+            <h2 class="section__title">Supplier Details</h2>
+          </div>
+          <div class="section__header-actions">
+            <button class="btn-view-history" id="btn-open-downloads" title="View Downloads">
+              <span class="material-icons-round">file_download</span>
+              <span>Downloads</span>
+            </button>
+            <button class="btn-view-history" id="btn-order-history" title="View Order History">
+              <span class="material-icons-round">history</span>
+              <span>Order History</span>
+              <span class="material-icons-round btn-view-history__arrow">arrow_forward</span>
+            </button>
+          </div>
+        </div>
+        <div class="customer-form">
+          <div class="customer-form__row">
+            <div class="form-group">
+              <label for="supplier-name" class="form-label">Supplier Name</label>
+              <input type="text" id="supplier-name" class="form-input" placeholder="Enter supplier name" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="form-group">
+              <label for="supplier-phone" class="form-label">Phone Number</label>
+              <input type="text" id="supplier-phone" class="form-input" placeholder="Enter phone number" autocomplete="off" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+            </div>
+            <div class="form-group">
+              <label for="supplier-email" class="form-label">Email Address</label>
+              <input type="email" id="supplier-email" class="form-input" placeholder="Enter email address" autocomplete="off">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="supplier-address" class="form-label">Supplier Address</label>
+            <input type="text" id="supplier-address" class="form-input" placeholder="Enter supplier address" autocomplete="off">
+          </div>
+        </div>
+      </section>
+
+      <section class="section items-section">
+        <div class="section__header">
+          <div class="section__header-left">
+            <span class="material-icons-round section__icon">inventory_2</span>
+            <h2 class="section__title">Order Items</h2>
+            <button class="btn-add" id="btn-add-row" style="margin-left: 10px;">
+              <span class="material-icons-round">add</span>
+              <span>Add Item</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="invoice-table">
+            <thead>
+              <tr>
+                <th class="th-num">#</th>
+                <th class="th-product">Product</th>
+                <th class="th-qty">Quantity</th>
+                <th class="th-action"></th>
+              </tr>
+            </thead>
+            <tbody id="order-body">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button class="btn btn--secondary" id="btn-clear">
+          <span class="material-icons-round">delete_sweep</span>
+          Clear All
+        </button>
+        <button class="btn btn--primary" id="btn-generate">
+          <span class="material-icons-round">bolt</span>
+          Generate Order
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast">
+    <span class="material-icons-round toast__icon" id="toast-icon">check_circle</span>
+    <span class="toast__msg" id="toast-msg">Order generated!</span>
+  </div>
+
+  <!-- Order Preview Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="order-modal">
+      <div class="modal__header">
+        <div class="modal__header-left">
+          <span class="material-icons-round modal__icon">preview</span>
+          <h3 class="modal__title">Order Preview</h3>
+        </div>
+        <button class="modal__close-btn" id="modal-close-x" onclick="hideModal()">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+
+      <div class="modal__content">
+        <div class="invoice-preview" id="order-preview">
+          <!-- Preview HTML will be injected here -->
+        </div>
+      </div>
+
+      <div class="modal__footer">
+        <div class="modal__footer-left">
+          <button class="btn btn--secondary modal__btn" id="modal-close" onclick="hideModal()">
+            <span class="material-icons-round">close</span>
+            Close
+          </button>
+        </div>
+        <div class="modal__footer-right">
+          <button class="btn btn--outline modal__btn" id="modal-share" title="Share PDF">
+            <span class="material-icons-round">share</span>
+            Share
+          </button>
+          <button class="btn btn--secondary modal__btn" id="modal-save">
+            <span class="material-icons-round">save</span>
+            Save
+          </button>
+          <button class="btn btn--primary modal__btn" id="modal-download">
+            <span class="material-icons-round">file_download</span>
+            Download PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../scripts/order.js"></script>
+</body>
+</html>

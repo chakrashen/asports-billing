@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/dashboard.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+  <div class="bg-glow bg-glow--3"></div>
+
+  <div class="app-container" style="max-width: 1400px;">
+    <!-- Header -->
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back to Home">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">analytics</span>
+          <div>
+            <h1 class="header__title">Dashboard</h1>
+            <p class="header__subtitle">Business Analytics</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <main class="dash-main">
+      <!-- Filters Bar -->
+      <div class="dash-filters">
+        <div class="dash-filters__left">
+          <span class="material-icons-round" style="font-size: 18px; color: var(--text-muted);">filter_list</span>
+          <button class="filter-chip active" data-range="all">All Time</button>
+          <button class="filter-chip" data-range="30">30 Days</button>
+          <button class="filter-chip" data-range="7">7 Days</button>
+          <button class="filter-chip" data-range="1">Today</button>
+        </div>
+        <div class="dash-filters__right">
+          <button class="btn-duedate" id="btn-duedate-view" title="Due Date View">
+            <span class="material-icons-round" style="font-size: 16px;">event_busy</span>
+            Due Date View
+          </button>
+          <button class="btn-export" id="btn-export" title="Export CSV">
+            <span class="material-icons-round" style="font-size: 16px;">download</span>
+            Export
+          </button>
+          <button class="btn-icon" id="btn-refresh" title="Refresh Data">
+            <span class="material-icons-round" style="font-size: 20px;">refresh</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card kpi-card--cyan">
+          <div class="kpi-card__header">
+            <div class="kpi-card__icon-wrap">
+              <span class="material-icons-round kpi-card__icon">account_balance_wallet</span>
+            </div>
+            <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-revenue-badge">—</span>
+          </div>
+          <div class="kpi-card__value" id="kpi-revenue">₹0</div>
+          <div class="kpi-card__label">Total Revenue</div>
+        </div>
+
+        <div class="kpi-card kpi-card--purple">
+          <div class="kpi-card__header">
+            <div class="kpi-card__icon-wrap">
+              <span class="material-icons-round kpi-card__icon">receipt_long</span>
+            </div>
+            <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-orders-badge">—</span>
+          </div>
+          <div class="kpi-card__value" id="kpi-orders">0</div>
+          <div class="kpi-card__label">Total Invoices</div>
+        </div>
+
+        <div class="kpi-card kpi-card--emerald">
+          <div class="kpi-card__header">
+            <div class="kpi-card__icon-wrap">
+              <span class="material-icons-round kpi-card__icon">trending_up</span>
+            </div>
+            <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-profit-badge">—</span>
+          </div>
+          <div class="kpi-card__value" id="kpi-profit">₹0</div>
+          <div class="kpi-card__label">Net Profit</div>
+        </div>
+
+        <div class="kpi-card kpi-card--rose">
+          <div class="kpi-card__header">
+            <div class="kpi-card__icon-wrap">
+              <span class="material-icons-round kpi-card__icon">warning_amber</span>
+            </div>
+            <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-pending-badge">—</span>
+          </div>
+          <div class="kpi-card__value" id="kpi-pending">₹0</div>
+          <div class="kpi-card__label">Pending Payments</div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-card__header">
+            <div class="chart-card__title">
+              <span class="material-icons-round">show_chart</span>
+              Revenue Trend
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="chart-revenue"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-card__header">
+            <div class="chart-card__title">
+              <span class="material-icons-round" style="color: var(--accent-purple);">inventory_2</span>
+              Top Products
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="chart-products"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analytics Row -->
+      <div class="analytics-grid">
+        <!-- Top Customers -->
+        <div class="analytics-card">
+          <div class="analytics-card__title">
+            <span class="material-icons-round">group</span>
+            Top Customers
+          </div>
+          <div class="customer-list" id="customer-list">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Financial Summary -->
+        <div class="analytics-card">
+          <div class="analytics-card__title">
+            <span class="material-icons-round" style="color: var(--accent-emerald);">pie_chart</span>
+            Financial Summary
+          </div>
+          <div class="financial-grid" id="financial-grid">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast">
+    <span class="material-icons-round toast__icon">check_circle</span>
+    <span id="toast-msg">Done</span>
+  </div>
+
+  <script src="../scripts/dashboard.js"></script>
+</body>
+</html>

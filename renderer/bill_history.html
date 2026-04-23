@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bill History — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/history.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <style>
+    .tab-bar {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 2px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 10px 4px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+    .tab-btn:hover {
+      color: var(--text-primary);
+    }
+    .tab-btn.active {
+      color: var(--accent-emerald);
+    }
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--accent-emerald);
+      border-radius: 2px;
+    }
+    .btn-view-detail {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      background: rgba(0, 229, 255, 0.08);
+      color: #00e5ff;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+    }
+    .btn-view-detail:hover {
+      background: rgba(0, 229, 255, 0.15);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(0, 229, 255, 0.15);
+    }
+
+    /* ─── PDF Modal ─── */
+    .pdf-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(10px);
+      z-index: 1000;
+      display: none;
+      flex-direction: column;
+      animation: fadeIn 0.2s ease;
+    }
+    .pdf-modal-overlay.show {
+      display: flex;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .pdf-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: rgba(10, 10, 26, 0.95);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .pdf-modal-header h3 {
+      color: var(--text-primary);
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .pdf-modal-header h3 .material-icons-round {
+      color: var(--accent-emerald);
+      font-size: 22px;
+    }
+    .pdf-modal-body {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow: hidden;
+    }
+    .pdf-modal-body embed,
+    .pdf-modal-body iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 8px;
+    }
+    .pdf-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      color: var(--text-muted);
+    }
+    .pdf-loading .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: var(--accent-emerald);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .pdf-modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: rgba(10, 10, 26, 0.95);
+      border-top: 1px solid var(--border-subtle);
+    }
+    .pdf-modal-footer-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .pdf-modal-footer-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .due-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.25);
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--accent-rose);
+    }
+    .due-badge .material-icons-round {
+      font-size: 18px;
+    }
+    .btn-all-paid {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-emerald);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+    }
+    .btn-all-paid:hover {
+      background: rgba(16, 185, 129, 0.22);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.15);
+    }
+    .btn-all-paid:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .btn-pdf-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      background: rgba(0, 229, 255, 0.08);
+      color: #00e5ff;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+    }
+    .btn-pdf-download:hover {
+      background: rgba(0, 229, 255, 0.15);
+      transform: translateY(-1px);
+    }
+    .btn-pdf-close {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+    }
+    .btn-pdf-close:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    /* ─── Responsive ─────────────────────────────────────────── */
+    @media (max-width: 1000px) {
+      #duedate-split-layout {
+        flex-direction: column;
+      }
+      .calendar-container {
+        flex: 1 !important;
+      }
+    }
+
+    /* ─── Due Date View Styles ─── */
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+    .calendar-day-label {
+      text-align: center;
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding-bottom: 8px;
+    }
+    .calendar-date {
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+    .calendar-date:hover:not(.empty) {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--border-subtle);
+      transform: scale(1.05);
+    }
+    .calendar-date.empty {
+      background: transparent;
+      cursor: default;
+    }
+    .calendar-date.today {
+      background: rgba(0, 229, 255, 0.1);
+      border-color: rgba(0, 229, 255, 0.3);
+      color: var(--accent-cyan);
+    }
+    .calendar-date.has-due::after {
+      content: '';
+      position: absolute;
+      bottom: 6px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+    }
+    .calendar-date.has-due.overdue::after { background: var(--accent-rose); box-shadow: 0 0 8px var(--accent-rose); }
+    .calendar-date.has-due.today-due::after { background: var(--accent-orange); box-shadow: 0 0 8px var(--accent-orange); }
+    .calendar-date.has-due.upcoming-due::after { background: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald); }
+    
+    .calendar-date.selected {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--text-primary);
+      color: var(--text-primary);
+    }
+
+    .due-item-mini {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .due-item-mini:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.1);
+      transform: translateX(4px);
+    }
+    .due-item-mini__info { flex: 1; min-width: 0; }
+    .due-item-mini__supplier { font-weight: 700; color: var(--text-primary); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .due-item-mini__invoice { font-size: 0.72rem; color: var(--accent-orange); font-family: 'Outfit', sans-serif; margin-top: 2px; }
+    .due-item-mini__amount { text-align: right; }
+    .due-item-mini__total { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.9rem; color: var(--text-primary); }
+    .due-item-mini__due { font-size: 0.75rem; color: var(--accent-rose); font-weight: 700; margin-top: 1px; }
+
+    .due-group-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px 10px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-subtle);
+      margin-top: 20px;
+    }
+    .due-group-header:first-child { margin-top: 0; }
+    .due-group-header .material-icons-round { font-size: 16px; }
+    .due-group-header.overdue { color: var(--accent-rose); }
+    .due-group-header.today { color: var(--accent-orange); }
+    .due-group-header.upcoming { color: var(--accent-emerald); }
+    .due-group-header.nodate { color: var(--text-muted); }
+
+    .due-bill-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      transition: background 0.15s ease;
+      cursor: pointer;
+    }
+    .due-bill-card:hover { background: rgba(255,255,255,0.04); }
+
+    .due-bill-card__date-box {
+      min-width: 60px;
+      text-align: center;
+      border-radius: 10px;
+      padding: 8px 6px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+    }
+    .due-bill-card__date-box .day { font-size: 1.5rem; line-height: 1; }
+    .due-bill-card__date-box .month { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+    .due-bill-card__date-box.overdue { background: rgba(244,63,94,0.12); color: var(--accent-rose); border: 1px solid rgba(244,63,94,0.2); }
+    .due-bill-card__date-box.today { background: rgba(251,146,60,0.12); color: var(--accent-orange); border: 1px solid rgba(251,146,60,0.2); }
+    .due-bill-card__date-box.upcoming { background: rgba(16,185,129,0.10); color: var(--accent-emerald); border: 1px solid rgba(16,185,129,0.18); }
+    .due-bill-card__date-box.nodate { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.08); }
+
+    .due-bill-card__info { flex: 1; min-width: 0; }
+    .due-bill-card__supplier { font-weight: 700; color: var(--text-primary); font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .due-bill-card__invoice { font-size: 0.78rem; color: var(--accent-orange); font-family:'Outfit',sans-serif; font-weight:600; margin-top:3px; }
+    .due-bill-card__urgency { font-size: 0.72rem; margin-top: 4px; font-weight: 600; }
+    .due-bill-card__urgency.overdue { color: var(--accent-rose); }
+    .due-bill-card__urgency.today { color: var(--accent-orange); }
+    .due-bill-card__urgency.upcoming { color: var(--accent-emerald); }
+    .due-bill-card__urgency.nodate { color: var(--text-muted); }
+
+    .due-bill-card__amount { text-align: right; }
+    .due-bill-card__amount .total { font-family:'Outfit',sans-serif; font-weight:700; font-size:1rem; color:var(--text-primary); }
+    .due-bill-card__amount .due { font-size:0.78rem; color:var(--accent-rose); font-weight:700; margin-top:2px; }
+    .due-bill-card__amount .paid-btn {
+      margin-top: 8px;
+      padding: 5px 14px;
+      border-radius: 7px;
+      border: 1px solid rgba(16,185,129,0.3);
+      background: rgba(16,185,129,0.08);
+      color: var(--accent-emerald);
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s ease;
+    }
+    .due-bill-card__amount .paid-btn:hover { background: rgba(16,185,129,0.18); transform: translateY(-1px); }
+
+    /* ─── Notification Banner ─── */
+    #notif-banner {
+      display: none;
+      align-items: flex-start;
+      gap: 14px;
+      background: linear-gradient(135deg, rgba(244,63,94,0.12), rgba(251,146,60,0.08));
+      border: 1px solid rgba(244,63,94,0.25);
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      animation: pulse-border 2s ease-in-out infinite;
+    }
+    #notif-banner.show { display: flex; }
+    @keyframes pulse-border {
+      0%,100% { border-color: rgba(244,63,94,0.25); box-shadow: none; }
+      50% { border-color: rgba(244,63,94,0.55); box-shadow: 0 0 20px rgba(244,63,94,0.12); }
+    }
+    #notif-banner .notif-icon {
+      font-size: 28px;
+      color: var(--accent-rose);
+      flex-shrink: 0;
+      margin-top: 2px;
+      animation: bell-shake 2.5s ease-in-out infinite;
+    }
+    @keyframes bell-shake {
+      0%,90%,100% { transform: rotate(0); }
+      92% { transform: rotate(-12deg); }
+      94% { transform: rotate(12deg); }
+      96% { transform: rotate(-8deg); }
+      98% { transform: rotate(8deg); }
+    }
+    #notif-banner .notif-body { flex:1; }
+    #notif-banner .notif-title { font-weight: 800; font-family:'Outfit',sans-serif; font-size:1rem; color:var(--text-primary); }
+    #notif-banner .notif-items { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+    #notif-banner .notif-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
+      font-family: 'Inter', sans-serif;
+    }
+    #notif-banner .notif-chip.overdue { background: rgba(244,63,94,0.15); color: var(--accent-rose); border: 1px solid rgba(244,63,94,0.3); }
+    #notif-banner .notif-chip.today { background: rgba(251,146,60,0.15); color: var(--accent-orange); border: 1px solid rgba(251,146,60,0.3); }
+    #notif-banner .notif-dismiss {
+      align-self: flex-start;
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted); font-size: 20px;
+      transition: color 0.2s ease; padding: 2px;
+    }
+    #notif-banner .notif-dismiss:hover { color: var(--text-primary); }
+
+    /* ─── Responsive ─────────────────────────────────────────── */
+    @media (max-width: 1000px) {
+      #duedate-split-layout {
+        flex-direction: column;
+      }
+      .calendar-container {
+        flex: 1 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <div class="app-container">
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">receipt_long</span>
+          <div>
+            <h1 class="header__title">Bill History</h1>
+            <p class="header__subtitle">Purchase Tracking</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <main class="history-main">
+      <!-- ─── Notification Banner ─── -->
+      <div id="notif-banner">
+        <span class="material-icons-round notif-icon">notifications_active</span>
+        <div class="notif-body">
+          <div class="notif-title">⚠️ Due Bill Alerts</div>
+          <div class="notif-items" id="notif-items"></div>
+        </div>
+        <button class="notif-dismiss" id="notif-dismiss" title="Dismiss">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+
+      <div class="filter-row" style="flex-direction: row; justify-content: space-between; align-items: center; gap: 20px; background: rgba(255,255,255,0.03); padding: 16px 20px; border-radius: 12px; border: 1px solid var(--border-subtle); margin-bottom: 30px;">
+        <div class="tab-bar" style="margin-bottom: 0; border-bottom: none;">
+          <button class="tab-btn active" id="tab-pending" data-status="pending">
+            <span class="material-icons-round" style="font-size: 18px; vertical-align: middle; margin-right: 6px;">pending_actions</span>
+            Due Bills
+          </button>
+          <button class="tab-btn" id="tab-paid" data-status="paid">
+            <span class="material-icons-round" style="font-size: 18px; vertical-align: middle; margin-right: 6px;">history</span>
+            Bill History
+          </button>
+          <button class="tab-btn" id="tab-duedate" data-status="duedate" style="position:relative;">
+            <span class="material-icons-round" style="font-size: 18px; vertical-align: middle; margin-right: 6px;">event_busy</span>
+            Due Date View
+            <span id="due-date-badge" style="display:none; position:absolute; top:4px; right:-4px; min-width:18px; height:18px; background:var(--accent-rose); border-radius:50%; font-size:0.65rem; font-weight:800; color:#fff; align-items:center; justify-content:center; padding:0 4px;"></span>
+          </button>
+        </div>
+        <div class="search-box" style="margin: 0; flex: 0 0 350px;">
+          <span class="material-icons-round search-box__icon">search</span>
+          <input type="text" id="search-input" class="search-box__input" placeholder="Search supplier or invoice..." autocomplete="off">
+        </div>
+      </div>
+
+      <section class="section history-section" style="padding: 0; background: transparent; border: none; box-shadow: none;">
+        <!-- Standard table view -->
+        <div id="table-view">
+          <div class="table-container" style="background: rgba(10, 10, 26, 0.4); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid var(--border-subtle); overflow: hidden;">
+            <table class="history-table" id="bills-table" style="border-collapse: separate; border-spacing: 0; width: 100%;">
+              <thead>
+                <tr style="background: rgba(255,255,255,0.03);">
+                  <th style="padding: 18px 12px 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); width: 140px;">Invoice No.</th>
+                  <th style="padding: 18px 12px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle);">Supplier Name</th>
+                  <th style="padding: 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: right;">Total Amount</th>
+                  <th style="padding: 18px 12px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: right; width: 140px;">Action</th>
+                  <th style="padding: 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: center; width: 80px;">Delete</th>
+                </tr>
+              </thead>
+              <tbody id="bills-body">
+              </tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="empty-state" style="display:none; padding: 100px 0;">
+            <span class="material-icons-round empty-state__icon" style="font-size: 64px; color: var(--border-subtle);">receipt_long</span>
+            <p class="empty-state__text" style="font-size: 1.2rem; font-weight: 600; color: var(--text-muted);">No bills found</p>
+            <p class="empty-state__sub">Purchase records matching your filter will appear here</p>
+          </div>
+        </div>
+
+        <!-- Due Date grouped view -->
+        <div id="duedate-view" style="display:none;">
+          <div id="duedate-empty" style="display:none; padding: 100px 0; text-align:center;">
+            <span class="material-icons-round" style="font-size: 64px; color: var(--border-subtle); display:block; margin-bottom:16px;">event_available</span>
+            <p style="font-size: 1.2rem; font-weight: 600; color: var(--text-muted); margin:0;">No pending due bills!</p>
+            <p style="color: var(--text-muted); font-size:0.88rem; margin-top:8px;">All bills are fully paid.</p>
+          </div>
+          
+          <div id="duedate-split-layout" style="display: flex; gap: 24px; min-height: 500px;">
+            <!-- Left: Calendar -->
+            <div class="calendar-container" style="flex: 0 0 450px; background: rgba(10, 10, 26, 0.4); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid var(--border-subtle); padding: 24px;">
+              <div class="calendar-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h3 id="calendar-month-year" style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin: 0;"></h3>
+                <div style="display: flex; gap: 8px;">
+                  <button class="btn-icon" id="btn-prev-month" title="Previous Month" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-subtle); background: transparent; color: var(--text-muted); cursor: pointer;">
+                    <span class="material-icons-round">chevron_left</span>
+                  </button>
+                  <button class="btn-icon" id="btn-next-month" title="Next Month" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-subtle); background: transparent; color: var(--text-muted); cursor: pointer;">
+                    <span class="material-icons-round">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+              <div class="calendar-grid" id="calendar-grid">
+                <!-- Filled by JS -->
+              </div>
+              <div class="calendar-legend" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-rose);"></span>
+                  <span>Overdue Bills</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-orange);"></span>
+                  <span>Due Today</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-emerald);"></span>
+                  <span>Upcoming Due</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Today's Due -->
+            <div class="today-due-container" style="flex: 1; background: rgba(10, 10, 26, 0.4); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid var(--border-subtle); padding: 24px; display: flex; flex-direction: column;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 10px;">
+                  <span class="material-icons-round" style="color: var(--accent-orange);">alarm</span>
+                  Today's Due Bills
+                </h3>
+                <span id="today-count-chip" style="background: rgba(251, 146, 60, 0.15); color: var(--accent-orange); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 800;">0 Bills</span>
+              </div>
+              <div id="today-due-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
+                <!-- Filled by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- PDF Viewer Modal -->
+  <div class="pdf-modal-overlay" id="pdf-modal">
+    <div class="pdf-modal-header">
+      <h3>
+        <span class="material-icons-round">picture_as_pdf</span>
+        <span id="pdf-modal-title">Purchase Bill</span>
+      </h3>
+      <div style="display: flex; align-items: center; gap: 8px; margin-right: 90px; margin-top: 12px;">
+        <button class="btn-pdf-close" id="btn-pdf-refresh" title="Refresh PDF" style="width: 36px; height: 36px; padding: 0; justify-content: center;">
+          <span class="material-icons-round">refresh</span>
+        </button>
+        <button class="btn-pdf-close" id="btn-pdf-header-close" title="Close" style="color: var(--accent-rose); width: 36px; height: 36px; padding: 0; justify-content: center;">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+    </div>
+    <div class="pdf-modal-body" id="pdf-modal-body">
+      <div class="pdf-loading" id="pdf-loading">
+        <div class="spinner"></div>
+        <span>Generating PDF preview...</span>
+      </div>
+    </div>
+    <div class="pdf-modal-footer">
+      <div class="pdf-modal-footer-left">
+        <div class="due-badge" id="pdf-due-badge">
+          <span class="material-icons-round">account_balance_wallet</span>
+          Due: <span id="pdf-due-amount">₹0.00</span>
+        </div>
+        <button class="btn-all-paid" id="btn-all-paid">
+          <span class="material-icons-round">check_circle</span>
+          All Paid
+        </button>
+      </div>
+      <div class="pdf-modal-footer-right">
+        <button class="btn-pdf-download" id="btn-pdf-delete" style="border-color: rgba(244, 63, 94, 0.25); background: rgba(244, 63, 94, 0.08); color: var(--accent-rose);">
+          <span class="material-icons-round">delete</span>
+          Delete
+        </button>
+        <button class="btn-pdf-download" id="btn-pdf-download">
+          <span class="material-icons-round">download</span>
+          Download
+        </button>
+        <button class="btn-pdf-close" id="btn-pdf-close">
+          <span class="material-icons-round">close</span>
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../scripts/bill_history.js"></script>
+</body>
+</html>

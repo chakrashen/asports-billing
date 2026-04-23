@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Directory — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/customers.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <div class="app-container">
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back" style="border-radius: 50%; background: rgba(255,255,255,0.05); width: 42px; height: 42px;">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand" style="margin-left: 10px;">
+          <span class="header__icon material-icons-round" style="font-size: 32px;">groups</span>
+          <div>
+            <h1 class="header__title" style="font-size: 1.4rem; letter-spacing: 0.5px; background: none; -webkit-text-fill-color: var(--accent-cyan); color: var(--accent-cyan);">Customer Directory</h1>
+            <p class="header__subtitle" style="font-size: 0.75rem; color: var(--text-muted); letter-spacing: 1px;">ASPORTS ZONE</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date" style="color: var(--text-secondary); opacity: 0.8;"></span>
+        <span class="header__time" id="header-time" style="color: var(--accent-cyan); font-weight: 600;"></span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="customers-main">
+      <!-- Summary -->
+      <div class="summary-row" id="summary-row">
+
+        <div class="summary-chip" id="filter-dues">
+          <span class="material-icons-round">account_balance_wallet</span>
+          <span id="total-dues-val">₹ 0</span> Outstanding
+        </div>
+        <div class="summary-chip is-active" id="summary-invoices">
+          <span class="material-icons-round">description</span>
+          <span id="total-invoices">0</span> Invoices
+        </div>
+        <div class="summary-chip" id="summary-revenue">
+          <span class="material-icons-round">payments</span>
+          <span id="total-revenue">₹ 0</span> Revenue
+        </div>
+        <div class="search-box">
+          <span class="material-icons-round search-box__icon">search</span>
+          <input type="text" id="search-input" class="search-box__input" placeholder="Search customer..." autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+
+      <!-- Customers List -->
+      <section class="section customers-section" id="customers-section">
+        <div id="customers-list">
+          <!-- Customer cards injected by JS -->
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="empty-state" style="display:none;">
+          <span class="material-icons-round empty-state__icon">person_off</span>
+          <p class="empty-state__text">No customers found</p>
+          <p class="empty-state__sub">Generate invoices to see customers here</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Invoice Detail Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="invoice-modal">
+      <div class="modal__header">
+        <div class="modal__header-left">
+          <span class="material-icons-round modal__icon">receipt</span>
+          <h3 class="modal__title">Invoice <span id="modal-invoice-id">#—</span></h3>
+        </div>
+        <button class="modal__close" id="modal-close">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+
+      <div class="modal__info">
+        <div class="modal__info-row">
+          <span class="modal__info-label">Customer</span>
+          <span class="modal__info-value" id="modal-customer">—</span>
+        </div>
+        <div class="modal__info-row" id="modal-phone-row">
+          <span class="modal__info-label">Phone</span>
+          <span class="modal__info-value" id="modal-phone">—</span>
+        </div>
+        <div class="modal__info-row" id="modal-email-row">
+          <span class="modal__info-label">Email</span>
+          <span class="modal__info-value" id="modal-email">—</span>
+        </div>
+        <div class="modal__info-row" id="modal-address-row">
+          <span class="modal__info-label">Address</span>
+          <span class="modal__info-value" id="modal-address">—</span>
+        </div>
+        <div class="modal__info-row">
+          <span class="modal__info-label">Date</span>
+          <span class="modal__info-value" id="modal-date">—</span>
+        </div>
+        <div class="modal__info-row">
+          <span class="modal__info-label">Total</span>
+          <span class="modal__info-value modal__info-value--amount" id="modal-amount">—</span>
+        </div>
+      </div>
+
+      <div class="modal__table-wrap">
+        <table class="modal__table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Product</th>
+              <th>Qty</th>
+              <th>Price</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="modal-items-body">
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal__total">
+        <span class="modal__total-label">Grand Total</span>
+        <span class="modal__total-value" id="modal-total">₹ 0.00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customer Detail Modal -->
+  <div class="modal-overlay" id="detail-modal-overlay">
+    <div class="modal detail-modal" id="detail-modal">
+      <div class="modal__header">
+        <div class="modal__header-left">
+          <span class="material-icons-round modal__icon">person</span>
+          <h3 class="modal__title">Customer Details</h3>
+        </div>
+        <div class="detail-modal__header-actions">
+          <button class="btn-detail-action btn-detail-action--edit" id="detail-edit-btn" title="Edit Details">
+            <span class="material-icons-round">edit</span>
+            Edit
+          </button>
+          <button class="btn-detail-action btn-detail-action--pdf" id="detail-pdf-btn" title="Download Invoice PDF">
+            <span class="material-icons-round">picture_as_pdf</span>
+            Download PDF
+          </button>
+          <button class="btn-detail-action btn-detail-action--save" id="detail-save-btn" style="display:none;" title="Save Changes">
+            <span class="material-icons-round">save</span>
+            Save Changes
+          </button>
+          <button class="btn-detail-action btn-detail-action--cancel" id="detail-cancel-btn" style="display:none;" title="Cancel Edit">
+            <span class="material-icons-round">close</span>
+            Cancel
+          </button>
+          <button class="modal__close" id="detail-modal-close">
+            <span class="material-icons-round">close</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW MODE -->
+      <div id="detail-view-section">
+        <!-- Profile Header -->
+        <div class="detail-profile">
+          <div class="detail-profile__avatar" id="detail-avatar">JD</div>
+          <div class="detail-profile__info">
+            <h2 class="detail-profile__name" id="detail-name">—</h2>
+            <p class="detail-profile__since" id="detail-since">—</p>
+          </div>
+          <div class="detail-profile__due" id="detail-due-pill" style="display:none;">
+            <div class="due-pill__amount">
+              <span class="due-pill__label">Current Due</span>
+              <span class="due-pill__value" id="detail-due-val">₹ 0.00</span>
+            </div>
+            <button class="due-pill__btn" id="btn-mark-paid" title="Mark All as Paid">
+              <span class="material-icons-round">check_circle</span>
+              Paid
+            </button>
+          </div>
+        </div>
+
+        <!-- Contact Info -->
+        <div class="detail-section">
+          <div class="detail-section__title">
+            <span class="material-icons-round">contact_phone</span>
+            Contact Information
+          </div>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-item__icon material-icons-round">phone</span>
+              <div>
+                <div class="detail-item__label">Phone Number</div>
+                <div class="detail-item__value" id="detail-phone-val">—</div>
+              </div>
+            </div>
+            <div class="detail-item">
+              <span class="detail-item__icon material-icons-round">email</span>
+              <div>
+                <div class="detail-item__label">Email Address</div>
+                <div class="detail-item__value" id="detail-email-val">—</div>
+              </div>
+            </div>
+            <div class="detail-item detail-item--full">
+              <span class="detail-item__icon material-icons-round">location_on</span>
+              <div>
+                <div class="detail-item__label">Billing Address</div>
+                <div class="detail-item__value" id="detail-address-val">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Purchase History (what they bought) -->
+        <div class="detail-section">
+          <div class="detail-section__title">
+            <span class="material-icons-round">shopping_bag</span>
+            Purchase History
+          </div>
+          <div id="detail-purchase-history">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Purchase Stats -->
+        <div class="detail-section">
+          <div class="detail-section__title">
+            <span class="material-icons-round">analytics</span>
+            Purchase Summary
+          </div>
+          <div class="detail-stats-grid">
+            <div class="detail-stat-card">
+              <span class="material-icons-round detail-stat-card__icon detail-stat-card__icon--cyan">receipt_long</span>
+              <div class="detail-stat-card__value" id="detail-total-invoices">0</div>
+              <div class="detail-stat-card__label">Total Invoices</div>
+            </div>
+            <div class="detail-stat-card">
+              <span class="material-icons-round detail-stat-card__icon detail-stat-card__icon--emerald">account_balance_wallet</span>
+              <div class="detail-stat-card__value" id="detail-total-spent">₹ 0</div>
+              <div class="detail-stat-card__label">Total Spent</div>
+            </div>
+            <div class="detail-stat-card">
+              <span class="material-icons-round detail-stat-card__icon detail-stat-card__icon--purple">schedule</span>
+              <div class="detail-stat-card__value" id="detail-last-visit">—</div>
+              <div class="detail-stat-card__label">Last Visit</div>
+            </div>
+            <div class="detail-stat-card">
+              <span class="material-icons-round detail-stat-card__icon detail-stat-card__icon--orange">trending_up</span>
+              <div class="detail-stat-card__value" id="detail-avg-order">₹ 0</div>
+              <div class="detail-stat-card__label">Avg. Order Value</div>
+            </div>
+            <div class="detail-stat-card detail-stat-card--dues">
+              <span class="material-icons-round detail-stat-card__icon detail-stat-card__icon--rose">account_balance</span>
+              <div class="detail-stat-card__value" id="detail-total-dues">₹ 0</div>
+              <div class="detail-stat-card__label">Pending Balance</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EDIT MODE -->
+      <div id="detail-edit-section" style="display:none;">
+        <div class="detail-edit-form">
+          <div class="detail-edit-title">
+            <span class="material-icons-round">edit_note</span>
+            Edit Customer Information
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-name">Customer Name</label>
+            <input type="text" class="form-input" id="edit-name" placeholder="Enter customer name" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-phone">Phone Number</label>
+            <input type="tel" id="edit-phone" class="form-input" placeholder="Enter 10-digit number" maxlength="10" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-email">Email Address</label>
+            <input type="email" class="form-input" id="edit-email" placeholder="Enter email address" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-address">Billing Address</label>
+            <textarea class="form-input form-textarea" id="edit-address" rows="3" placeholder="Enter billing address"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../scripts/customers.js"></script>
+</body>
+</html>
+

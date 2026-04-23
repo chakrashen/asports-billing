@@ -1,0 +1,57 @@
+{
+  "name": "asports-billing",
+  "version": "1.0.0",
+  "description": "ASPORTS ZONE Billing System",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron . 2>nul",
+    "dev": "electron .",
+    "rebuild": "npx @electron/rebuild",
+    "postinstall": "npx @electron/rebuild",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.asports.billing",
+    "productName": "ASPORTS ZONE Billing",
+    "copyright": "Copyright © 2026 ASPORTS ZONE",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "runAfterFinish": true
+    },
+    "files": [
+      "**/*",
+      "!dist/*",
+      "!node_modules/@electron/rebuild/*"
+    ],
+    "extraFiles": [
+      {
+        "from": "node_modules/electron/dist/ffmpeg.dll",
+        "to": "ffmpeg.dll"
+      }
+    ],
+    "asar": true
+  },
+  "keywords": [],
+  "author": "ASPORTS ZONE",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^12.8.0",
+    "pdfkit": "^0.18.0",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "electron": "^41.2.0",
+    "electron-builder": "^24.13.3"
+  }
+}

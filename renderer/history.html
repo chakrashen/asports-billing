@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice Dashboard — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/history.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back to Home">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">analytics</span>
+          <div>
+            <h1 class="header__title">Invoice Dashboard</h1>
+            <p class="header__subtitle">Sales Performance & History</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__actions">
+        <button class="btn-refresh" id="btn-refresh" title="Refresh Dashboard">
+          <span class="material-icons-round">sync</span>
+        </button>
+        <button class="btn-export" id="btn-export" title="Export to CSV">
+          <span class="material-icons-round">file_download</span>
+          <span>Export CSV</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="dashboard-main">
+      <!-- KPI Cards -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-card__icon stat-card__icon--blue">
+            <span class="material-icons-round">payments</span>
+          </div>
+          <div class="stat-card__content">
+            <span class="stat-card__label">Total Revenue</span>
+            <span class="stat-card__value" id="kpi-revenue">₹0.00</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__icon stat-card__icon--purple">
+            <span class="material-icons-round">receipt_long</span>
+          </div>
+          <div class="stat-card__content">
+            <span class="stat-card__label">Invoices</span>
+            <span class="stat-card__value" id="kpi-count">0</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__icon stat-card__icon--cyan">
+            <span class="material-icons-round">show_chart</span>
+          </div>
+          <div class="stat-card__content">
+            <span class="stat-card__label">Avg. Invoice</span>
+            <span class="stat-card__value" id="kpi-avg">₹0.00</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__icon stat-card__icon--orange">
+            <span class="material-icons-round">military_tech</span>
+          </div>
+          <div class="stat-card__content">
+            <span class="stat-card__label">Highest Sale</span>
+            <span class="stat-card__value" id="kpi-highest">₹0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Section -->
+      <div class="charts-grid">
+        <div class="chart-container">
+          <div class="chart-header">
+            <h3 class="chart-title">Sales Revenue Trend</h3>
+          </div>
+          <canvas id="salesTrendChart"></canvas>
+        </div>
+        <div class="chart-container">
+          <div class="chart-header">
+            <h3 class="chart-title">Top Products</h3>
+          </div>
+          <canvas id="topProductsChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <span class="material-icons-round search-icon">search</span>
+          <input type="text" id="filter-search" placeholder="Search customer or product..." autocomplete="off">
+        </div>
+        <div class="date-filters">
+          <div class="date-input">
+            <label>From</label>
+            <input type="date" id="filter-start">
+          </div>
+          <div class="date-input">
+            <label>To</label>
+            <input type="date" id="filter-end">
+          </div>
+        </div>
+      </div>
+
+      <!-- Invoices Table -->
+      <section class="section table-section">
+        <div class="table-wrapper">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th class="th-id">Invoice No.</th>
+                <th class="th-customer">Customer</th>
+                <th class="th-date">Date</th>
+                <th class="th-amount">Total Amount</th>
+                <th class="th-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="invoice-body">
+              <!-- Content loaded via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="empty-state" style="display:none;">
+          <span class="material-icons-round empty-state__icon">inbox</span>
+          <p class="empty-state__text">No data matches your filters</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="invoice-modal">
+      <!-- Modal template same as previous one -->
+      <div class="modal__header">
+        <div class="modal__header-left">
+          <span class="material-icons-round modal__icon">receipt</span>
+          <h3 class="modal__title">Invoice Detail <span id="modal-invoice-id">#—</span></h3>
+        </div>
+        <button class="modal__close" id="modal-close">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+
+      <div class="modal__info">
+        <div class="modal__info-row">
+          <span class="modal__info-label">Customer</span>
+          <span class="modal__info-value" id="modal-customer">—</span>
+        </div>
+        <div class="modal__info-row">
+          <span class="modal__info-label">Date</span>
+          <span class="modal__info-value" id="modal-date">—</span>
+        </div>
+      </div>
+
+      <div class="modal__table-wrap">
+        <table class="modal__table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Product</th>
+              <th>Qty</th>
+              <th>Price</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="modal-items-body"></tbody>
+        </table>
+      </div>
+
+      <div class="modal__total">
+        <span class="modal__total-label">Grand Total</span>
+        <span class="modal__total-value" id="modal-total">₹0.00</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">
+    <span class="material-icons-round toast__icon" id="toast-icon">check_circle</span>
+    <span class="toast__msg" id="toast-msg"></span>
+  </div>
+
+  <script src="../scripts/history.js"></script>
+</body>
+</html>

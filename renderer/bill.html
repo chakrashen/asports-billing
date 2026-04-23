@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bill Update — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/invoice.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <div class="app-container">
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back to Home">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">edit_note</span>
+          <div>
+            <h1 class="header__title">Bill Update</h1>
+            <p class="header__subtitle">Purchase Bill Entry</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <main class="invoice-main">
+      <!-- ─── Upload Bill Photo Section ─── -->
+      <section class="section upload-section" style="animation: fade-in-up 0.4s var(--ease-out) both;">
+        <div class="section__header">
+          <div class="section__header-left">
+            <span class="material-icons-round section__icon" style="color: var(--accent-purple);">photo_camera</span>
+            <h2 class="section__title">Upload Bill Photo</h2>
+          </div>
+          <div class="upload-status" id="upload-status" style="display:none;">
+            <span class="material-icons-round spinner" style="font-size:18px; color: var(--accent-cyan);">autorenew</span>
+            <span id="upload-status-text" style="font-size: 0.82rem; color: var(--text-secondary); font-weight: 500;">Processing...</span>
+          </div>
+        </div>
+        <div class="upload-dropzone" id="upload-dropzone">
+          <input type="file" id="bill-photo-input" accept="image/*" style="display:none;">
+          <div class="upload-dropzone__content" id="dropzone-content">
+            <span class="material-icons-round upload-dropzone__icon">cloud_upload</span>
+            <p class="upload-dropzone__title">Drop bill photo here or click to upload</p>
+            <p class="upload-dropzone__hint">Supports JPG, PNG, WEBP • OCR will extract all data automatically</p>
+          </div>
+          <div class="upload-preview" id="upload-preview" style="display:none;">
+            <img id="preview-image" class="upload-preview__img" alt="Bill preview">
+            <div class="upload-preview__actions">
+              <button class="btn-upload-action btn-upload-action--change" id="btn-change-photo" title="Change Photo">
+                <span class="material-icons-round">swap_horiz</span>
+                <span>Change</span>
+              </button>
+              <button class="btn-upload-action btn-upload-action--remove" id="btn-remove-photo" title="Remove Photo">
+                <span class="material-icons-round">delete_outline</span>
+                <span>Remove</span>
+              </button>
+            </div>
+          </div>
+          <!-- Processing Overlay -->
+          <div class="upload-processing" id="upload-processing" style="display:none;">
+            <div class="upload-processing__spinner"></div>
+            <p class="upload-processing__text" id="processing-text">Analyzing bill...</p>
+            <div class="upload-processing__progress">
+              <div class="upload-processing__bar" id="processing-bar"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section customer-section">
+        <div class="section__header">
+          <div class="section__header-left">
+            <span class="material-icons-round section__icon">description</span>
+            <h2 class="section__title">Bill Information</h2>
+          </div>
+          <div class="section__header-actions">
+            <button class="btn-view-bills btn-view-bills--past" id="btn-past-bills" title="Bill History">
+              <span class="material-icons-round">history</span>
+              <span>Bill History</span>
+            </button>
+            <button class="btn-view-bills" id="btn-open-folder" title="Open Downloads Folder" style="background: rgba(0, 229, 255, 0.1); color: #00e5ff; border: 1px solid rgba(0, 229, 255, 0.2);">
+              <span class="material-icons-round">folder</span>
+              <span>Downloads</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 1: Supplier Name, Invoice Number -->
+        <div class="customer-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 100%;">
+          <div class="form-group">
+            <label for="supplier-name" class="form-label">Supplier Name <span style="color: var(--accent-rose);">*</span></label>
+            <input type="text" id="supplier-name" class="form-input" placeholder="Enter supplier name" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="invoice-number" class="form-label">Invoice Number <span style="color: var(--accent-rose);">*</span></label>
+            <input type="text" id="invoice-number" class="form-input" placeholder="INV-001" autocomplete="off">
+          </div>
+        </div>
+
+        <!-- Row 2: Supplier Address (full width) -->
+        <div class="customer-form" style="display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 100%; margin-top: 16px;">
+          <div class="form-group">
+            <label for="supplier-address" class="form-label">Supplier Address</label>
+            <textarea id="supplier-address" class="form-input form-input--textarea" placeholder="Enter supplier address" rows="2" style="resize: none; min-height: 60px;"></textarea>
+          </div>
+        </div>
+
+        <!-- Row 3: Phone, Email -->
+        <div class="customer-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 100%; margin-top: 16px;">
+          <div class="form-group">
+            <label for="supplier-phone" class="form-label">Contact Number</label>
+            <input type="tel" id="supplier-phone" class="form-input" placeholder="+91 XXXXX XXXXX" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="supplier-email" class="form-label">Email</label>
+            <input type="email" id="supplier-email" class="form-input" placeholder="supplier@email.com" autocomplete="off">
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Dates Section ─── -->
+      <section class="section" style="animation: fade-in-up 0.5s var(--ease-out) 0.05s both;">
+        <div class="section__header">
+          <div class="section__header-left">
+            <span class="material-icons-round section__icon" style="color: var(--accent-orange);">event</span>
+            <h2 class="section__title">Important Dates</h2>
+          </div>
+        </div>
+        <div class="customer-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 100%;">
+          <div class="form-group">
+            <label for="bill-date" class="form-label">Bill Date</label>
+            <input type="date" id="bill-date" class="form-input" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="due-date" class="form-label">Due Date</label>
+            <input type="date" id="due-date" class="form-input" autocomplete="off">
+          </div>
+        </div>
+      </section>
+
+      <section class="section items-section">
+        <div class="section__header">
+          <div class="section__header-left">
+            <span class="material-icons-round section__icon">inventory_2</span>
+            <h2 class="section__title">Bill Items</h2>
+          </div>
+          <button class="btn-add" id="btn-add-row">
+            <span class="material-icons-round">add</span>
+            <span>Add Item</span>
+          </button>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="invoice-table">
+            <thead>
+              <tr>
+                <th class="th-num">#</th>
+                <th class="th-product">Product</th>
+                <th class="th-qty">Qty</th>
+                <th class="th-price">Rate (₹)</th>
+                <th style="width: 100px;">GST %</th>
+                <th style="width: 140px; text-align: right;">Amount (₹)</th>
+                <th class="th-action"></th>
+              </tr>
+            </thead>
+            <tbody id="bill-body">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─── Billing Summary Section ─── -->
+      <section class="section" style="animation: fade-in-up 0.5s var(--ease-out) 0.15s both;">
+        <div class="section__header">
+          <div class="section__header-left">
+            <span class="material-icons-round section__icon" style="color: var(--accent-emerald);">receipt_long</span>
+            <h2 class="section__title">Billing Summary</h2>
+          </div>
+        </div>
+        <div class="customer-form" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; max-width: 100%;">
+          <div class="form-group">
+            <label for="total-amount" class="form-label">Total Amount (₹) <span style="color: var(--accent-rose);">*</span></label>
+            <input type="number" id="total-amount" class="form-input" placeholder="0.00" step="0.01" autocomplete="off" style="font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.1rem; color: var(--accent-emerald);">
+          </div>
+          <div class="form-group">
+            <label for="paid-amount" class="form-label">Paid Amount (₹)</label>
+            <input type="number" id="paid-amount" class="form-input" placeholder="0.00" step="0.01" value="0" autocomplete="off" style="font-family: 'Outfit', sans-serif; font-weight: 600;">
+          </div>
+          <div class="form-group">
+            <label for="due-amount" class="form-label">Due Amount (₹)</label>
+            <input type="number" id="due-amount" class="form-input" placeholder="0.00" step="0.01" value="0" autocomplete="off" readonly style="font-family: 'Outfit', sans-serif; font-weight: 700; color: var(--accent-rose); cursor: not-allowed; opacity: 0.85;">
+          </div>
+        </div>
+        <p style="margin-top: 10px; font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+          <span class="material-icons-round" style="font-size: 14px;">info</span>
+          Due Amount is auto-calculated as Total Amount − Paid Amount
+        </p>
+      </section>
+
+      <div class="actions">
+        <button class="btn btn--secondary" id="btn-clear">
+          <span class="material-icons-round">delete_sweep</span>
+          Clear All
+        </button>
+        <button class="btn btn--primary" id="btn-save">
+          <span class="material-icons-round">save</span>
+          Save Bill
+        </button>
+        <button class="btn btn--primary" id="btn-download-save" style="background: var(--gradient-emerald); box-shadow: 0 4px 20px rgba(52, 211, 153, 0.25);">
+          <span class="material-icons-round">download</span>
+          Download & Save
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast">
+    <span class="material-icons-round toast__icon" id="toast-icon">check_circle</span>
+    <span class="toast__msg" id="toast-msg">Bill saved!</span>
+  </div>
+
+  <!-- ─── Extracted Data Confirmation Modal ─── -->
+  <div class="modal-overlay" id="ocr-modal">
+    <div class="modal" style="max-width:650px;">
+      <div class="modal__header">
+        <div class="modal__header-left">
+          <span class="material-icons-round modal__icon" style="color: var(--accent-emerald);">fact_check</span>
+          <h3 class="modal__title">Extracted Bill Data</h3>
+        </div>
+        <button class="modal__close-btn" id="ocr-modal-close">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      <div class="modal__content" style="padding:24px; max-height: 55vh; overflow-y: auto;">
+        <div class="ocr-result-grid" id="ocr-result-grid">
+          <!-- Filled by JS -->
+        </div>
+        <div style="margin-top:16px;">
+          <p style="font-size:0.78rem; color: var(--text-muted); display:flex; align-items:center; gap:6px;">
+            <span class="material-icons-round" style="font-size:16px;">info</span>
+            Review the extracted data. You can edit fields in the form after applying.
+          </p>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="ocr-modal-cancel">
+          <span class="material-icons-round">close</span>
+          Cancel
+        </button>
+        <div class="modal__footer-right">
+          <button class="btn btn--primary" id="ocr-modal-apply" style="background: var(--gradient-emerald); box-shadow: 0 4px 20px rgba(52, 211, 153, 0.25);">
+            <span class="material-icons-round">check</span>
+            Apply & Fill Form
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../scripts/bill.js"></script>
+</body>
+</html>

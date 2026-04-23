@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coming Soon — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/placeholder.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <div class="app-container">
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back to Home">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">sports_soccer</span>
+          <div>
+            <h1 class="header__title" id="page-title">Coming Soon</h1>
+            <p class="header__subtitle">ASPORTS ZONE</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="placeholder-main">
+      <div class="placeholder-card">
+        <div class="placeholder-card__icon-ring">
+          <span class="material-icons-round placeholder-card__icon" id="placeholder-icon">engineering</span>
+        </div>
+        <h2 class="placeholder-card__title">Under Development</h2>
+        <p class="placeholder-card__desc">This module is currently being built. Check back soon for exciting new features!</p>
+        <button class="btn btn--primary" id="btn-go-home">
+          <span class="material-icons-round">home</span>
+          Back to Home
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    document.getElementById('btn-back').addEventListener('click', () => {
+      window.location.href = 'home.html';
+    });
+    document.getElementById('btn-go-home').addEventListener('click', () => {
+      window.location.href = 'home.html';
+    });
+
+    // Set title based on URL param
+    const params = new URLSearchParams(window.location.search);
+    const module = params.get('module');
+    if (module === 'order') {
+      document.getElementById('page-title').textContent = 'Create Order';
+      document.getElementById('placeholder-icon').textContent = 'shopping_cart';
+    } else if (module === 'update') {
+      document.getElementById('page-title').textContent = 'Bill Update';
+      document.getElementById('placeholder-icon').textContent = 'edit_note';
+    }
+  </script>
+</body>
+</html>

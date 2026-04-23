@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Invoice — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/invoice.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back to Home">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">receipt_long</span>
+          <div>
+            <h1 class="header__title">Customer Invoice</h1>
+            <p class="header__subtitle">ASPORTS ZONE</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="invoice-main">
+      <!-- Customer Info -->
+      <section class="section customer-section" id="customer-section">
+        <div class="section__header">
+          <div class="section__header-left">
+            <span class="material-icons-round section__icon">person</span>
+            <h2 class="section__title">Customer Details</h2>
+          </div>
+        <div class="section__header-actions">
+          <button class="btn-view-history" id="btn-view-history" title="View PDF history">
+            <span class="material-icons-round">picture_as_pdf</span>
+            <span>PDF History</span>
+            <span class="material-icons-round btn-view-history__arrow">arrow_forward</span>
+          </button>
+          <button class="btn-view-customers" id="btn-view-customers" title="View all customers">
+            <span class="material-icons-round">groups</span>
+            <span>View All Customers</span>
+            <span class="material-icons-round btn-view-customers__arrow">arrow_forward</span>
+          </button>
+        </div>
+        </div>
+        <div class="customer-form">
+          <div class="customer-form__row">
+            <div class="form-group">
+              <label for="customer-name" class="form-label">Customer Name</label>
+              <input type="text" id="customer-name" class="form-input" placeholder="Enter customer name" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="form-group">
+              <label for="customer-phone" class="form-label">Phone Number</label>
+              <input type="tel" id="customer-phone" class="form-input" placeholder="Enter 10-digit number" maxlength="10" inputmode="numeric" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="form-group">
+              <label for="customer-email" class="form-label">Email Address</label>
+              <input type="email" id="customer-email" class="form-input" placeholder="Enter email address" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="customer-address" class="form-label">Billing Address</label>
+            <textarea id="customer-address" class="form-input form-input--textarea" placeholder="Enter full billing address" rows="2" spellcheck="false"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Items Table -->
+      <section class="section items-section" id="items-section">
+        <div class="section__header">
+          <div class="section__header-left">
+            <span class="material-icons-round section__icon">inventory_2</span>
+            <h2 class="section__title">Invoice Items</h2>
+            <button class="btn-add" id="btn-add-row">
+              <span class="material-icons-round">add</span>
+              <span>Add Item</span>
+            </button>
+          </div>
+          <div class="section__header-actions">
+            <button class="btn btn--secondary" id="btn-clear">
+              <span class="material-icons-round">delete_sweep</span>
+              Clear All
+            </button>
+            <button class="btn btn--primary" id="btn-generate">
+              <span class="material-icons-round">bolt</span>
+              Generate Invoice
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="invoice-table" id="invoice-table">
+            <thead>
+              <tr>
+                <th class="th-num">#</th>
+                <th class="th-product">Product</th>
+                <th class="th-qty">Quantity</th>
+                <th class="th-price">Price (₹)</th>
+                <th class="th-total">Total (₹)</th>
+                <th class="th-action"></th>
+              </tr>
+            </thead>
+            <tbody id="invoice-body">
+              <!-- Rows injected by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Totals -->
+        <div class="totals-bar" id="totals-bar">
+          <div class="totals-bar__left">
+            <span class="totals-bar__count"><span id="item-count">0</span> items</span>
+          </div>
+          <div class="totals-bar__right">
+            <div class="grand-total-group">
+              <span class="totals-bar__label">Grand Total</span>
+              <span class="totals-bar__value" id="grand-total">₹ 0.00</span>
+            </div>
+            <div class="payment-details">
+              <div class="payment-group">
+                <span class="payment-label">Received Amount (₹)</span>
+                <input type="number" id="paid-amount" class="payment-input" placeholder="0.00" min="0" step="0.01">
+              </div>
+              <div class="payment-group">
+                <span class="payment-label">Remaining Balance</span>
+                <span class="payment-value" id="due-total">₹ 0.00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast">
+    <span class="material-icons-round toast__icon" id="toast-icon">check_circle</span>
+    <span class="toast__msg" id="toast-msg">Invoice saved!</span>
+  </div>
+
+  <!-- Invoice Preview Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="invoice-modal">
+      <div class="modal__header">
+        <div class="modal__header-left">
+          <span class="material-icons-round modal__icon">preview</span>
+          <h3 class="modal__title">Invoice Preview</h3>
+        </div>
+        <button class="modal__close-btn" id="modal-close-x">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+
+      <div class="modal__content">
+        <!-- Rendered Invoice Preview -->
+        <div class="invoice-preview" id="invoice-preview">
+          <div class="preview-header">
+            <div class="preview-brand">
+              <span class="material-icons-round preview-brand__icon">sports_soccer</span>
+              <div>
+                <h4 class="preview-brand__name">ASPORTS ZONE</h4>
+                <p class="preview-brand__tag">Premium Sports Equipment</p>
+              </div>
+            </div>
+            <div class="preview-meta">
+              <div class="preview-meta__item">
+                <span class="preview-meta__label">Invoice #</span>
+                <span class="preview-meta__value" id="preview-id">NEW</span>
+              </div>
+              <div class="preview-meta__item">
+                <span class="preview-meta__label">Date</span>
+                <span class="preview-meta__value" id="preview-date">--/--/--</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-customer">
+            <div class="preview-customer__left">
+              <p class="preview-customer__label">Billed To</p>
+              <p class="preview-customer__name" id="preview-customer-name">Customer Name</p>
+              <p class="preview-customer__address" id="preview-customer-address">Billing Address</p>
+            </div>
+            <div class="preview-customer__right">
+              <div class="preview-contact-item" id="preview-phone-wrap">
+                <span class="material-icons-round">phone</span>
+                <span id="preview-customer-phone">Phone Number</span>
+              </div>
+              <div class="preview-contact-item" id="preview-email-wrap">
+                <span class="material-icons-round">email</span>
+                <span id="preview-customer-email">Email Address</span>
+              </div>
+            </div>
+          </div>
+
+          <table class="preview-table">
+            <thead>
+              <tr>
+                <th>Item Description</th>
+                <th>Qty</th>
+                <th>Rate</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody id="preview-items-body">
+              <!-- Items will be injected here -->
+            </tbody>
+          </table>
+
+          <div class="preview-footer">
+            <div class="preview-total">
+              <span class="preview-total__label">Grand Total</span>
+              <span class="preview-total__value" id="preview-grand-total">₹ 0.00</span>
+            </div>
+            <p class="preview-thanks">Thank you for your business!</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal__footer">
+        <button class="btn btn--secondary modal__btn" id="modal-close">
+          <span class="material-icons-round">close</span>
+          Close
+        </button>
+        <div class="modal__footer-right">
+          <button class="btn btn--outline modal__btn" id="modal-print">
+            <span class="material-icons-round">print</span>
+            Print
+          </button>
+          <button class="btn btn--secondary modal__btn" id="modal-save">
+            <span class="material-icons-round">save</span>
+            Save
+          </button>
+          <button class="btn btn--primary modal__btn" id="modal-download">
+            <span class="material-icons-round">file_download</span>
+            Download PDF
+          </button>
+        </div>
+      </div>
+      
+      <!-- Premium Printer Selection Overlay -->
+      <div class="printer-menu" id="printer-menu">
+        <div class="printer-menu__header">
+          <h4 class="printer-menu__title">Select Printer</h4>
+          <button class="printer-menu__close" id="btn-close-printers">
+            <span class="material-icons-round">close</span>
+          </button>
+        </div>
+        <div class="printer-menu__list" id="printer-list">
+          <!-- Printers will be listed here dynamically -->
+          <div class="printer-loading">
+            <span class="material-icons-round spinner">sync</span>
+            Scanning for printers...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+  <script src="../scripts/invoice.js"></script>
+
+</body>
+</html>

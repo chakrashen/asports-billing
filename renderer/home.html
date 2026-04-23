@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASPORTS ZONE — Billing System</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/home.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+  <div class="bg-glow bg-glow--3"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header" id="app-header">
+      <div class="header__brand">
+        <span class="header__icon material-icons-round">sports_soccer</span>
+        <div>
+          <h1 class="header__title">ASPORTS ZONE</h1>
+          <p class="header__subtitle">Billing System</p>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="home-main">
+      <div class="hero">
+        <h2 class="hero__heading">Welcome Back<span class="hero__dot">.</span></h2>
+        <p class="hero__sub">Select a module to get started</p>
+      </div>
+
+      <div class="cards-grid" id="cards-grid">
+        <!-- Customer Invoice -->
+        <div class="card card--invoice" id="btn-invoice" tabindex="0" role="button">
+          <div class="card__glow"></div>
+          <div class="card__icon-wrap">
+            <span class="material-icons-round card__icon">receipt_long</span>
+          </div>
+          <h3 class="card__title">Customer Invoice</h3>
+          <p class="card__desc">Create invoices, add products, and generate bills for customers</p>
+          <div class="card__arrow">
+            <span class="material-icons-round">arrow_forward</span>
+          </div>
+        </div>
+
+        <!-- Create Order -->
+        <div class="card card--order" id="btn-order" tabindex="0" role="button">
+          <div class="card__glow"></div>
+          <div class="card__icon-wrap">
+            <span class="material-icons-round card__icon">shopping_cart</span>
+          </div>
+          <h3 class="card__title">Create Order</h3>
+          <p class="card__desc">Place new purchase orders and manage inventory requests</p>
+          <div class="card__arrow">
+            <span class="material-icons-round">arrow_forward</span>
+          </div>
+        </div>
+
+        <!-- Bill Update -->
+        <div class="card card--update" id="btn-update" tabindex="0" role="button">
+          <div class="card__glow"></div>
+          <div class="card__icon-wrap">
+            <span class="material-icons-round card__icon">edit_note</span>
+          </div>
+          <h3 class="card__title">Bill Update</h3>
+          <p class="card__desc">Modify existing invoices, adjust quantities, and update pricing</p>
+          <div class="card__arrow">
+            <span class="material-icons-round">arrow_forward</span>
+          </div>
+        </div>
+
+        <!-- Dashboard (formerly Invoice History) -->
+        <div class="card card--history" id="btn-history" tabindex="0" role="button">
+          <div class="card__glow"></div>
+          <div class="card__icon-wrap">
+            <span class="material-icons-round card__icon">analytics</span>
+          </div>
+          <h3 class="card__title">Dashboard</h3>
+          <p class="card__desc">Full sales analytics, revenue trends, and detailed invoice history</p>
+          <div class="card__arrow">
+            <span class="material-icons-round">arrow_forward</span>
+          </div>
+        </div>
+      </div>
+
+
+    </main>
+  </div>
+
+  <script src="../scripts/home.js"></script>
+</body>
+</html>

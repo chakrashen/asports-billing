@@ -1,0 +1,61 @@
+/* ════════════════════════════════════════════════════════════
+   ASPORTS ZONE — Placeholder Screen Styles
+   ════════════════════════════════════════════════════════════ */
+
+.placeholder-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 120px);
+  padding: 24px 0;
+}
+
+.placeholder-card {
+  text-align: center;
+  padding: 60px 48px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  max-width: 480px;
+  animation: fade-in-up 0.6s var(--ease-out) both;
+}
+
+.placeholder-card__icon-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: rgba(251, 146, 60, 0.08);
+  border: 2px solid rgba(251, 146, 60, 0.15);
+  margin-bottom: 28px;
+  animation: pulse-ring 3s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0%, 100% { transform: scale(1); border-color: rgba(251, 146, 60, 0.15); }
+  50% { transform: scale(1.05); border-color: rgba(251, 146, 60, 0.3); }
+}
+
+.placeholder-card__icon {
+  font-size: 42px;
+  color: var(--accent-orange);
+}
+
+.placeholder-card__title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.placeholder-card__desc {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
