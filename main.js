@@ -19,7 +19,7 @@ function createWindow() {
       nodeIntegration: false,
       experimentalFeatures: true
     },
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: path.join(__dirname, 'build', 'icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: {
       color: '#0a0a1a',
@@ -1440,7 +1440,8 @@ ipcMain.handle('generate-bill-pdf', async (event, data) => {
 // Fix GPU cache "Access is denied" errors on Windows
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-software-rasterizer');
+// NOTE: Do NOT disable-software-rasterizer — it's the fallback when GPU is off.
+// Without it, <canvas> (Chart.js) crashes the renderer process.
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('in-process-gpu');
@@ -1451,6 +1452,7 @@ app.commandLine.appendSwitch('disk-cache-size', '1');
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
+  console.error('[ASPORTS] Another instance is already running. Exiting.');
   app.quit();
 } else {
   app.on('second-instance', () => {
@@ -1461,7 +1463,14 @@ if (!gotTheLock) {
     }
   });
 
-  app.whenReady().then(createWindow);
+  app.whenReady().then(() => {
+    try {
+      createWindow();
+    } catch (err) {
+      console.error('[ASPORTS] Failed to create window:', err);
+      app.quit();
+    }
+  });
 
 
   app.on('window-all-closed', () => {

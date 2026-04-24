@@ -4,7 +4,7 @@
   "description": "ASPORTS ZONE Billing System",
   "main": "main.js",
   "scripts": {
-    "start": "electron . 2>nul",
+    "start": "electron .",
     "dev": "electron .",
     "rebuild": "npx @electron/rebuild",
     "postinstall": "npx @electron/rebuild",
