@@ -95,6 +95,15 @@ function recalcDue() {
 document.getElementById('paid-amount').addEventListener('input', recalcDue);
 document.getElementById('total-amount').addEventListener('input', recalcDue);
 
+// Email auto-suffix logic
+document.getElementById('supplier-email').addEventListener('blur', (e) => {
+  const val = e.target.value.trim();
+  if (val && !val.includes('@')) {
+    e.target.value = val + '@gmail.com';
+  }
+});
+
+
 window.deleteRow = (id) => {
   const row = document.getElementById(`row-${id}`);
   if (row) row.remove();
@@ -154,6 +163,11 @@ function collectFormData() {
 
   if (!supplierName || !invoiceNumber || isNaN(totalAmount)) {
     showToast('Please fill Supplier Name, Invoice Number & Total Amount', true);
+    return null;
+  }
+
+  if (phone && phone.length !== 10) {
+    showToast('Contact Number must be exactly 10 digits', true);
     return null;
   }
 

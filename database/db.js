@@ -4,7 +4,7 @@ const { app } = require('electron');
 
 // Use userData path for packaged app, or local path for dev
 const isDev = !app.isPackaged;
-const dbPath = isDev 
+const dbPath = isDev
   ? path.join(__dirname, '..', 'billing.db')
   : path.join(app.getPath('userData'), 'billing.db');
 
@@ -65,63 +65,63 @@ try {
 // Migration: Add customer detail columns to sales_invoices
 try {
   db.exec("ALTER TABLE sales_invoices ADD COLUMN phone_number TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE sales_invoices ADD COLUMN email TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE sales_invoices ADD COLUMN billing_address TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE sales_invoices ADD COLUMN invoice_number INTEGER");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE sales_invoices ADD COLUMN paid_amount REAL DEFAULT 0");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE sales_invoices ADD COLUMN due_amount REAL DEFAULT 0");
-} catch (e) {}
+} catch (e) { }
 
 // Migration: Add supplier detail columns to purchase_orders
 try {
   db.exec("ALTER TABLE purchase_orders ADD COLUMN phone_number TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE purchase_orders ADD COLUMN email TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE purchase_orders ADD COLUMN supplier_address TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE purchase_orders ADD COLUMN order_number INTEGER");
-} catch (e) {}
+} catch (e) { }
 // Migration: Add supplier detail columns to purchase_bills
 try {
   db.exec("ALTER TABLE purchase_bills ADD COLUMN phone_number TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE purchase_bills ADD COLUMN email TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE purchase_bills ADD COLUMN supplier_address TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE purchase_bills ADD COLUMN bill_date TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE purchase_bills ADD COLUMN due_date TEXT");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE purchase_bills ADD COLUMN paid_amount REAL DEFAULT 0");
-} catch (e) {}
+} catch (e) { }
 try {
   db.exec("ALTER TABLE purchase_bills ADD COLUMN due_amount REAL DEFAULT 0");
-} catch (e) {}
+} catch (e) { }
 
-// Migration: Add gst_percent column to purchase_items
+// Migration: Add gst_percent column to purchase_items (Try adding it first in case table exists)
 try {
   db.exec("ALTER TABLE purchase_items ADD COLUMN gst_percent REAL DEFAULT 0");
-} catch (e) {}
+} catch (e) { }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS purchase_items (
@@ -130,6 +130,7 @@ db.exec(`
     product TEXT NOT NULL,
     qty INTEGER NOT NULL DEFAULT 1,
     rate REAL NOT NULL DEFAULT 0,
+    gst_percent REAL DEFAULT 0,
     FOREIGN KEY (bill_id) REFERENCES purchase_bills(id) ON DELETE CASCADE
   );
 `);

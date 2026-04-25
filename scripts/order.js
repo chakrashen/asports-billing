@@ -265,52 +265,6 @@ document.getElementById('modal-download').addEventListener('click', async () => 
   }
 });
 
-// Share Logic
-document.getElementById('modal-share').addEventListener('click', async () => {
-  if (!currentOrderData) return;
-  
-  const btn = document.getElementById('modal-share');
-  const originalHtml = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="material-icons-round">hourglass_top</span> Sharing...';
-
-  try {
-    // 1. Generate the PDF first
-    const result = await window.api.downloadOrderPdf(currentOrderData);
-    if (result && result.success) {
-      // 2. Read the PDF data
-      const pdfRes = await window.api.readOrderPdf(result.filePath);
-      
-      if (pdfRes.success) {
-        const filename = `Order_${currentOrderData.supplierName.replace(/\s+/g, '_')}.pdf`;
-        const file = new File([pdfRes.data], filename, { type: 'application/pdf' });
-
-        // 3. Try to use native sharing
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: 'Purchase Order',
-            text: `Purchase Order from ASPORTS ZONE for ${currentOrderData.supplierName}`
-          });
-        } else {
-          // Fallback if file sharing is not supported by the OS/Environment
-          await window.api.copyFileToClipboard(result.filePath);
-          showToast('Native share not supported. Path copied to clipboard!', true);
-          // Suggest opening the folder
-          if (confirm('Native file sharing is not supported on this system. The PDF was saved to your Desktop. Would you like to open the Desktop folder?')) {
-            window.api.openOrdersFolder();
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Share error:', error);
-    showToast('Sharing failed or was cancelled', true);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = originalHtml;
-  }
-});
 
 function resetBtn(btn, icon, text) {
   btn.disabled = false;

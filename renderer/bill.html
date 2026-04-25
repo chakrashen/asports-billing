@@ -85,13 +85,13 @@
             <h2 class="section__title">Bill Information</h2>
           </div>
           <div class="section__header-actions">
-            <button class="btn-view-bills btn-view-bills--past" id="btn-past-bills" title="Bill History">
-              <span class="material-icons-round">history</span>
-              <span>Bill History</span>
-            </button>
             <button class="btn-view-bills" id="btn-open-folder" title="Open Downloads Folder" style="background: rgba(0, 229, 255, 0.1); color: #00e5ff; border: 1px solid rgba(0, 229, 255, 0.2);">
               <span class="material-icons-round">folder</span>
               <span>Downloads</span>
+            </button>
+            <button class="btn-view-bills btn-view-bills--past" id="btn-past-bills" title="Bill History">
+              <span class="material-icons-round">history</span>
+              <span>Bill History</span>
             </button>
           </div>
         </div>
@@ -120,7 +120,7 @@
         <div class="customer-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 100%; margin-top: 16px;">
           <div class="form-group">
             <label for="supplier-phone" class="form-label">Contact Number</label>
-            <input type="tel" id="supplier-phone" class="form-input" placeholder="+91 XXXXX XXXXX" autocomplete="off">
+            <input type="tel" id="supplier-phone" class="form-input" placeholder="Enter 10-digit number" maxlength="10" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')" autocomplete="off">
           </div>
           <div class="form-group">
             <label for="supplier-email" class="form-label">Email</label>
@@ -154,11 +154,11 @@
           <div class="section__header-left">
             <span class="material-icons-round section__icon">inventory_2</span>
             <h2 class="section__title">Bill Items</h2>
+            <button class="btn-add" id="btn-add-row">
+              <span class="material-icons-round">add</span>
+              <span>Add Item</span>
+            </button>
           </div>
-          <button class="btn-add" id="btn-add-row">
-            <span class="material-icons-round">add</span>
-            <span>Add Item</span>
-          </button>
         </div>
 
         <div class="table-wrapper">
