@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="../styles/invoice.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <!-- PDF.js for PDF to Image conversion -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
   <div class="bg-grid"></div>
@@ -39,8 +41,8 @@
       <section class="section upload-section" style="animation: fade-in-up 0.4s var(--ease-out) both;">
         <div class="section__header">
           <div class="section__header-left">
-            <span class="material-icons-round section__icon" style="color: var(--accent-purple);">photo_camera</span>
-            <h2 class="section__title">Upload Bill Photo</h2>
+            <span class="material-icons-round section__icon" style="color: var(--accent-purple);">article</span>
+            <h2 class="section__title">Upload Bill</h2>
           </div>
           <div class="upload-status" id="upload-status" style="display:none;">
             <span class="material-icons-round spinner" style="font-size:18px; color: var(--accent-cyan);">autorenew</span>
@@ -48,11 +50,11 @@
           </div>
         </div>
         <div class="upload-dropzone" id="upload-dropzone">
-          <input type="file" id="bill-photo-input" accept="image/*" style="display:none;">
+          <input type="file" id="bill-photo-input" accept="image/*,.pdf" style="display:none;">
           <div class="upload-dropzone__content" id="dropzone-content">
             <span class="material-icons-round upload-dropzone__icon">cloud_upload</span>
-            <p class="upload-dropzone__title">Drop bill photo here or click to upload</p>
-            <p class="upload-dropzone__hint">Supports JPG, PNG, WEBP • OCR will extract all data automatically</p>
+            <p class="upload-dropzone__title">Drop bill photo or PDF here or click to upload</p>
+            <p class="upload-dropzone__hint">Supports JPG, PNG, WEBP, PDF • OCR will extract all data automatically</p>
           </div>
           <div class="upload-preview" id="upload-preview" style="display:none;">
             <img id="preview-image" class="upload-preview__img" alt="Bill preview">

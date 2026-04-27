@@ -16,11 +16,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  background: var(--bg-surface);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 14px 20px;
-  backdrop-filter: blur(12px);
 }
 
 .dash-filters__left {
@@ -136,11 +135,10 @@
 }
 
 .kpi-card {
-  background: var(--bg-surface);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 24px;
-  backdrop-filter: blur(12px);
   position: relative;
   overflow: hidden;
   transition: all 0.3s var(--ease-out);
@@ -167,7 +165,6 @@
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  filter: blur(50px);
   opacity: 0.4;
   pointer-events: none;
   transition: opacity 0.3s ease;
@@ -261,11 +258,10 @@
 }
 
 .chart-card {
-  background: var(--bg-surface);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 24px;
-  backdrop-filter: blur(12px);
   animation: fade-in-up 0.5s var(--ease-out) 0.25s both;
 }
 
@@ -310,11 +306,10 @@
 }
 
 .analytics-card {
-  background: var(--bg-surface);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 24px;
-  backdrop-filter: blur(12px);
   animation: fade-in-up 0.5s var(--ease-out) 0.35s both;
 }
 
@@ -459,11 +454,10 @@
 
 /* ─── Invoice Table ──────────────────────────────────────── */
 .table-card {
-  background: var(--bg-surface);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 24px;
-  backdrop-filter: blur(12px);
   animation: fade-in-up 0.5s var(--ease-out) 0.4s both;
 }
 

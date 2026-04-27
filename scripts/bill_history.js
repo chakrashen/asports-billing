@@ -356,7 +356,7 @@ function showDueToast(msg) {
       background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3);
       color: var(--accent-emerald); font-family: 'Inter', sans-serif; font-weight:700;
       font-size: 0.88rem; padding: 12px 24px; border-radius: 10px;
-      backdrop-filter: blur(12px); z-index:9999; opacity:0;
+      z-index:9999; opacity:0;
       transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1);
       display:flex; align-items:center; gap:8px;
     `;
@@ -401,6 +401,9 @@ async function generateBillPdf(bill) {
   if (!itemsResult.success) return null;
   return await window.api.downloadBillPdf({
     supplierName: bill.supplier_name,
+    supplierAddress: bill.supplier_address,
+    phone: bill.phone_number,
+    email: bill.email,
     invoiceNumber: bill.invoice_number,
     totalAmount: bill.total_amount,
     paidAmount: bill.paid_amount || 0,

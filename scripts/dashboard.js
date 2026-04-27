@@ -432,7 +432,7 @@ function escapeHtml(text) {
 }
 
 // ─── Auto-Refresh (30s) ─────────────────────────────────────
-refreshTimer = setInterval(loadDashboard, 30000);
+refreshTimer = setInterval(loadDashboard, 120000);
 
 // ─── Add spin keyframe ──────────────────────────────────────
 const style = document.createElement('style');

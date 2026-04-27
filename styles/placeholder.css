@@ -13,11 +13,9 @@
 .placeholder-card {
   text-align: center;
   padding: 60px 48px;
-  background: var(--bg-surface);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   max-width: 480px;
   animation: fade-in-up 0.6s var(--ease-out) both;
 }

@@ -122,12 +122,10 @@
 
 /* ─── Customer Card Redesign ─────────────────────────────── */
 .customer-card {
-  background: rgba(18, 20, 45, 0.5);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 20px;
   overflow: hidden;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   transition: all 0.3s var(--ease-out);
 }
 
@@ -378,8 +376,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -709,8 +706,6 @@
   background: rgba(244, 63, 94, 0.08); /* Default Due state */
   border: 1px solid rgba(244, 63, 94, 0.2);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   animation: slide-in-right 0.4s var(--ease-out);
   transition: all 0.3s ease;
 }

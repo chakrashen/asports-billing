@@ -230,11 +230,9 @@
   align-items: center;
   gap: 14px;
   padding: 20px;
-  background: var(--bg-surface);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   transition: all 0.3s var(--ease-out);
 }
 

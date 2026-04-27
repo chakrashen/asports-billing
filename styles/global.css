@@ -68,6 +68,7 @@ html {
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeSpeed;
 }
 
 body {
@@ -102,16 +103,16 @@ body {
 .bg-glow {
   position: fixed;
   border-radius: 50%;
-  filter: blur(120px);
   pointer-events: none;
   z-index: 0;
-  animation: glow-float 12s ease-in-out infinite;
+  animation: glow-float 15s ease-in-out infinite;
+  will-change: opacity;
 }
 
 .bg-glow--1 {
   width: 500px;
   height: 500px;
-  background: radial-gradient(circle, rgba(0,229,255,0.08) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 60%);
   top: -150px;
   right: -100px;
 }
@@ -119,25 +120,24 @@ body {
 .bg-glow--2 {
   width: 400px;
   height: 400px;
-  background: radial-gradient(circle, rgba(168,85,247,0.06) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(168,85,247,0.04) 0%, transparent 60%);
   bottom: -100px;
   left: -80px;
-  animation-delay: 4s;
+  animation-delay: 5s;
 }
 
 .bg-glow--3 {
   width: 350px;
   height: 350px;
-  background: radial-gradient(circle, rgba(52,211,153,0.05) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(52,211,153,0.03) 0%, transparent 60%);
   top: 40%;
   left: 50%;
-  animation-delay: 8s;
+  animation-delay: 10s;
 }
 
 @keyframes glow-float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(30px, -20px) scale(1.05); }
-  66% { transform: translate(-20px, 15px) scale(0.95); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 /* ─── App Container ──────────────────────────────────────── */
@@ -292,12 +292,10 @@ body {
 
 /* ─── Section ────────────────────────────────────────────── */
 .section {
-  background: var(--bg-surface);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 24px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .section__header {

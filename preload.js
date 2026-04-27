@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   openInvoicePdf: (data) => ipcRenderer.invoke('open-invoice-pdf', data),
   getInvoices: () => ipcRenderer.invoke('get-invoices'),
   getInvoiceItems: (invoiceId) => ipcRenderer.invoke('get-invoice-items', invoiceId),
+  getAllInvoiceItems: () => ipcRenderer.invoke('get-all-invoice-items'),
   deleteInvoice: (invoiceId) => ipcRenderer.invoke('delete-invoice', invoiceId),
   deleteOrder: (orderId) => ipcRenderer.invoke('delete-order', orderId),
   updateOrder: (data) => ipcRenderer.invoke('update-order', data),

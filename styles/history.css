@@ -93,12 +93,10 @@
 }
 
 .order-card {
-  background: rgba(18, 20, 45, 0.5);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 20px;
   overflow: hidden;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   transition: all 0.3s var(--ease-out);
   display: flex;
   align-items: center;
@@ -345,9 +343,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -115,6 +115,16 @@ ipcMain.handle('get-invoice-items', async (event, invoiceId) => {
   }
 });
 
+// Get ALL invoice items in one query (batch for performance)
+ipcMain.handle('get-all-invoice-items', async () => {
+  try {
+    const items = db.prepare('SELECT * FROM sales_items ORDER BY invoice_id').all();
+    return { success: true, items };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // Clear all dues for a customer
 ipcMain.handle('clear-customer-dues', async (event, { name, phone }) => {
   try {
@@ -1044,16 +1054,37 @@ ipcMain.handle('read-order-pdf', async (event, filePath) => {
 // ─── Extract Bill Data via Groq Vision AI ───────────────────
 const GROQ_API_KEY = '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';
 
-ipcMain.handle('ocr-bill-photo', async (event, imagePath) => {
+ipcMain.handle('ocr-bill-photo', async (event, imageSource) => {
   try {
-    // Read image and convert to base64
-    const imageBuffer = fs.readFileSync(imagePath);
-    const base64Image = imageBuffer.toString('base64');
-    
-    // Detect mime type from extension
-    const ext = path.extname(imagePath).toLowerCase();
-    const mimeMap = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp' };
-    const mimeType = mimeMap[ext] || 'image/jpeg';
+    let base64Image;
+    let mimeType;
+
+    if (imageSource.startsWith('data:')) {
+      // Handle base64 data URL (from PDF conversion)
+      const matches = imageSource.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        mimeType = matches[1];
+        base64Image = matches[2];
+      } else {
+        return { success: false, error: 'Invalid image data' };
+      }
+    } else {
+      // Handle local file path
+      const imageBuffer = fs.readFileSync(imageSource);
+      base64Image = imageBuffer.toString('base64');
+      
+      // Detect mime type from extension
+      const ext = path.extname(imageSource).toLowerCase();
+      const mimeMap = { 
+        '.jpg': 'image/jpeg', 
+        '.jpeg': 'image/jpeg', 
+        '.png': 'image/png', 
+        '.webp': 'image/webp', 
+        '.gif': 'image/gif', 
+        '.bmp': 'image/bmp' 
+      };
+      mimeType = mimeMap[ext] || 'image/jpeg';
+    }
 
     // Send progress
     event.sender.send('ocr-progress', { progress: 0.3 });
@@ -1149,7 +1180,7 @@ Rules:
       success: true,
       data: {
         supplierName: parsed.supplierName || '',
-        supplierAddress: parsed.supplierAddress || '',
+        supplierAddress: parsed.supplierAddress || parsed.address || '',
         phone: parsed.phone || '',
         email: parsed.email || '',
         invoiceNumber: parsed.invoiceNumber || '',
@@ -1176,7 +1207,7 @@ Rules:
 ipcMain.handle('download-bill-pdf', async (event, billData) => {
   return new Promise((resolve) => {
     try {
-      const { supplierName, supplierAddress, phone, email, invoiceNumber, billDate, dueDate, totalAmount, paidAmount = 0, dueAmount = 0, items } = billData;
+      const { supplierName, supplierAddress, address, phone, email, invoiceNumber, billDate, dueDate, totalAmount, paidAmount = 0, dueAmount = 0, items } = billData;
       
       const sanitizedName = (supplierName || 'Bill').replace(/[<>:"/\\|?*]/g, '').trim();
       const invNo = (invoiceNumber || 'NEW').toString().replace(/[<>:"/\\|?*]/g, '_').trim();
@@ -1232,7 +1263,7 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
       doc.font('Helvetica-Bold').fontSize(10).text('Supplier:', margin + 5, 145);
       doc.text((supplierName || '').toUpperCase(), margin + 5, 158);
       doc.font('Helvetica').fontSize(9);
-      doc.text('ADDRESS: ' + (supplierAddress || 'N/A'), margin + 5, 170, { width: (width / 2) - 10 });
+      doc.text('ADDRESS: ' + (supplierAddress || address || 'N/A'), margin + 5, 170, { width: (width / 2) - 10 });
       if (email) doc.text('Email: ' + email, margin + 5, 195);
       if (phone) doc.text('Phone: ' + phone, margin + 5, 205);
 

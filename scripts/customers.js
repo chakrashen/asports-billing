@@ -48,16 +48,22 @@ async function loadCustomers() {
 
     const invoices = result.invoices;
 
-    // Load items for each invoice
-    const invoicesWithItems = await Promise.all(
-      invoices.map(async (inv) => {
-        const itemsResult = await window.api.getInvoiceItems(inv.id);
-        return {
-          ...inv,
-          items: itemsResult.success ? itemsResult.items : []
-        };
-      })
-    );
+    // Load ALL items in one batch query instead of N individual calls
+    const allItemsResult = await window.api.getAllInvoiceItems();
+    const allItems = (allItemsResult && allItemsResult.success) ? allItemsResult.items : [];
+
+    // Group items by invoice_id for fast lookup
+    const itemsByInvoice = {};
+    allItems.forEach(item => {
+      if (!itemsByInvoice[item.invoice_id]) itemsByInvoice[item.invoice_id] = [];
+      itemsByInvoice[item.invoice_id].push(item);
+    });
+
+    // Attach items to each invoice
+    const invoicesWithItems = invoices.map(inv => ({
+      ...inv,
+      items: itemsByInvoice[inv.id] || []
+    }));
 
     // Group by customer name (case-insensitive)
     const customerMap = {};
@@ -643,8 +649,10 @@ function closeModal() {
 }
 
 // ─── Search & Filters ───────────────────────────────────────
+let searchTimer = null;
 document.getElementById('search-input').addEventListener('input', () => {
-  applyFilters();
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => applyFilters(), 150);
 });
 
 

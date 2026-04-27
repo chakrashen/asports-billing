@@ -1,6 +1,11 @@
 let rowId = 0;
 let currentImagePath = null; // Track uploaded image path for PDF generation
 
+// ─── PDF.js Configuration ───────────────────────────────────
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
 function updateClock() {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
@@ -287,16 +292,16 @@ dropzone.addEventListener('drop', (e) => {
   e.preventDefault();
   dropzone.classList.remove('drag-over');
   const file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) {
-    handleImageFile(file);
+  if (file && (file.type.startsWith('image/') || file.type === 'application/pdf')) {
+    handleUploadFile(file);
   } else {
-    showToast('Please upload an image file', true);
+    showToast('Please upload an image or PDF file', true);
   }
 });
 
 fileInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
-  if (file) handleImageFile(file);
+  if (file) handleUploadFile(file);
 });
 
 // ─── Change / Remove buttons ────────────────────────────────
@@ -321,43 +326,86 @@ function resetUploadZone() {
   processingBar.style.width = '0%';
 }
 
-// ─── Handle image file ──────────────────────────────────────
-async function handleImageFile(file) {
-  // Show preview
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    previewImage.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-
-  currentImagePath = window.api.getPathForFile(file);
-
+// ─── Handle uploaded file (Image or PDF) ────────────────────
+async function handleUploadFile(file) {
   dropzoneContent.style.display = 'none';
   uploadPreview.style.display = 'flex';
   uploadProcessing.style.display = 'flex';
-
+  
   // Show status in header
   uploadStatus.style.display = 'flex';
-  uploadStatusText.textContent = 'Extracting text...';
+  uploadStatusText.textContent = 'Preparing file...';
 
-  processingText.textContent = 'Initializing OCR engine...';
+  processingText.textContent = 'Processing file...';
   processingBar.style.width = '5%';
 
-  // Listen for progress updates
-  window.api.onOcrProgress((data) => {
-    const pct = Math.round(data.progress * 100);
-    processingBar.style.width = `${pct}%`;
-    if (pct < 30) {
-      processingText.textContent = 'Loading OCR engine...';
-    } else if (pct < 70) {
-      processingText.textContent = 'Reading bill text...';
-    } else {
-      processingText.textContent = 'Extracting data...';
-    }
-  });
+  let imageToProcess = null;
 
   try {
-    const result = await window.api.ocrBillPhoto(currentImagePath);
+    if (file.type === 'application/pdf') {
+      processingText.textContent = 'Reading PDF...';
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      
+      const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better OCR
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      await page.render({ canvasContext: context, viewport: viewport }).promise;
+      
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      previewImage.src = dataUrl;
+      
+      // We need a path for the backend, but since it's a dataURL from PDF, 
+      // we'll send the dataURL directly if the backend supports it, 
+      // or save it to a temp file.
+      // The current backend ocr-bill-photo expects an imagePath.
+      // Let's modify the backend or use a temp file.
+      
+      // Actually, I can send the dataUrl to a new IPC handler 
+      // or modify ocr-bill-photo to handle dataUrl.
+      
+      // For now, let's assume we use the existing path if it's the original file,
+      // but for PDF we converted it.
+      // I'll send the dataUrl to the backend.
+      imageToProcess = dataUrl;
+    } else {
+      // Image flow
+      const reader = new FileReader();
+      const loadPromise = new Promise(resolve => {
+        reader.onload = (e) => {
+          previewImage.src = e.target.result;
+          resolve(e.target.result);
+        };
+      });
+      reader.readAsDataURL(file);
+      imageToProcess = await loadPromise;
+      
+      // Use original path for images if available
+      currentImagePath = window.api.getPathForFile(file);
+    }
+
+    uploadStatusText.textContent = 'Extracting data...';
+    processingBar.style.width = '10%';
+
+    // Listen for progress updates
+    window.api.onOcrProgress((data) => {
+      const pct = Math.round(data.progress * 100);
+      processingBar.style.width = `${pct}%`;
+      if (pct < 30) {
+        processingText.textContent = 'Loading AI model...';
+      } else if (pct < 70) {
+        processingText.textContent = 'Analyzing bill structure...';
+      } else {
+        processingText.textContent = 'Finalizing extraction...';
+      }
+    });
+
+    // Call OCR handler - we'll update the handler to accept either path or dataUrl
+    const result = await window.api.ocrBillPhoto(imageToProcess || currentImagePath);
 
     uploadProcessing.style.display = 'none';
     processingBar.style.width = '100%';
@@ -368,12 +416,13 @@ async function handleImageFile(file) {
       showOcrResultModal(result.data);
     } else {
       uploadStatus.style.display = 'none';
-      showToast('OCR failed: ' + (result?.error || 'Unknown error'), true);
+      showToast('Extraction failed: ' + (result?.error || 'Unknown error'), true);
     }
   } catch (err) {
+    console.error('File processing error:', err);
     uploadProcessing.style.display = 'none';
     uploadStatus.style.display = 'none';
-    showToast('OCR error: ' + err.message, true);
+    showToast('File error: ' + err.message, true);
   }
 }
 
@@ -514,8 +563,8 @@ document.getElementById('ocr-modal-apply').addEventListener('click', () => {
   if (extractedData.invoiceNumber) {
     document.getElementById('invoice-number').value = extractedData.invoiceNumber;
   }
-  if (extractedData.supplierAddress) {
-    document.getElementById('supplier-address').value = extractedData.supplierAddress;
+  if (extractedData.supplierAddress || extractedData.address) {
+    document.getElementById('supplier-address').value = extractedData.supplierAddress || extractedData.address;
   }
   if (extractedData.phone) {
     document.getElementById('supplier-phone').value = extractedData.phone;
