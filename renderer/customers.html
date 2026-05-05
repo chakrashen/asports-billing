@@ -1,14 +1,279 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Customer Directory — ASPORTS ZONE</title>
   <link rel="stylesheet" href="../styles/global.css">
   <link rel="stylesheet" href="../styles/customers.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <style>
+    html,
+    body {
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-container {
+      height: 100vh;
+      max-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      flex-shrink: 0;
+      background: var(--bg-primary);
+      z-index: 10;
+    }
+
+    .customers-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-top: 10px;
+      padding-bottom: 0;
+      gap: 20px;
+    }
+
+    .summary-row {
+      flex-shrink: 0;
+    }
+
+    .customers-section {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 8px !important;
+      margin-bottom: 20px;
+    }
+
+    /* Scrollbar Styling for the list */
+    .customers-section::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .customers-section::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .customers-section::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+
+    .customers-section::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    /* ─── PDF Viewer Modal ─── */
+    .pdf-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .pdf-modal-overlay.show {
+      display: flex;
+    }
+
+    .pdf-modal-container {
+      width: 94%;
+      max-width: 1100px;
+      height: 90vh;
+      background: rgba(15, 15, 35, 0.98);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+      animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .pdf-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: rgba(10, 10, 26, 0.95);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .pdf-modal-header h3 {
+      color: var(--text-primary);
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+    }
+
+    .pdf-modal-header h3 .material-icons-round {
+      color: var(--accent-emerald);
+      font-size: 22px;
+    }
+
+    .pdf-modal-body {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .pdf-modal-body embed {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 8px;
+    }
+
+    .pdf-loading {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      color: var(--text-muted);
+    }
+
+    .pdf-loading .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: var(--accent-emerald);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .pdf-modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: rgba(10, 10, 26, 0.95);
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .pdf-modal-footer-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .pdf-modal-footer-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .due-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.25);
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--accent-rose);
+    }
+
+    .due-badge .material-icons-round {
+      font-size: 18px;
+    }
+
+    .btn-pdf-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .btn-pdf-action:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn-pdf-action--new {
+      border-color: rgba(16, 185, 129, 0.25);
+      background: rgba(16, 185, 129, 0.08);
+      color: var(--accent-emerald);
+    }
+
+    .btn-pdf-action--paid {
+      border-color: rgba(16, 185, 129, 0.35);
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-emerald);
+      padding: 8px 16px;
+      font-weight: 800;
+    }
+
+    .btn-pdf-action--paid:hover {
+      background: rgba(16, 185, 129, 0.22);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.15);
+    }
+
+    .btn-pdf-action--edit {
+      border-color: rgba(0, 229, 255, 0.25);
+      background: rgba(0, 229, 255, 0.08);
+      color: #00e5ff;
+    }
+
+    .btn-pdf-action--delete {
+      border-color: rgba(244, 63, 94, 0.25);
+      background: rgba(244, 63, 94, 0.08);
+      color: var(--accent-rose);
+    }
+
+    .btn-pdf-action--close {
+      border-color: var(--border-subtle);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
+
 <body>
   <!-- Animated background -->
   <div class="bg-grid"></div>
@@ -18,14 +283,18 @@
   <div class="app-container">
     <header class="header" id="app-header">
       <div class="header__left">
-        <button class="btn-back" id="btn-back" title="Back" style="border-radius: 50%; background: rgba(255,255,255,0.05); width: 42px; height: 42px;">
+        <button class="btn-back" id="btn-back" title="Back"
+          style="border-radius: 50%; background: rgba(255,255,255,0.05); width: 42px; height: 42px;">
           <span class="material-icons-round">arrow_back</span>
         </button>
         <div class="header__brand" style="margin-left: 10px;">
           <span class="header__icon material-icons-round" style="font-size: 32px;">groups</span>
           <div>
-            <h1 class="header__title" style="font-size: 1.4rem; letter-spacing: 0.5px; background: none; -webkit-text-fill-color: var(--accent-cyan); color: var(--accent-cyan);">Customer Directory</h1>
-            <p class="header__subtitle" style="font-size: 0.75rem; color: var(--text-muted); letter-spacing: 1px;">ASPORTS ZONE</p>
+            <h1 class="header__title"
+              style="font-size: 1.4rem; letter-spacing: 0.5px; background: none; -webkit-text-fill-color: var(--accent-cyan); color: var(--accent-cyan);">
+              Customer Directory</h1>
+            <p class="header__subtitle" style="font-size: 0.75rem; color: var(--text-muted); letter-spacing: 1px;">
+              ASPORTS ZONE</p>
           </div>
         </div>
       </div>
@@ -54,7 +323,8 @@
         </div>
         <div class="search-box">
           <span class="material-icons-round search-box__icon">search</span>
-          <input type="text" id="search-input" class="search-box__input" placeholder="Search customer..." autocomplete="off" spellcheck="false">
+          <input type="text" id="search-input" class="search-box__input" placeholder="Search customer..."
+            autocomplete="off" spellcheck="false">
         </div>
       </div>
 
@@ -82,9 +352,15 @@
           <span class="material-icons-round modal__icon">receipt</span>
           <h3 class="modal__title">Invoice <span id="modal-invoice-id">#—</span></h3>
         </div>
-        <button class="modal__close" id="modal-close">
-          <span class="material-icons-round">close</span>
-        </button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button class="btn-detail-action btn-detail-action--edit" id="invoice-edit-btn" title="Edit Invoice Items">
+            <span class="material-icons-round">edit</span>
+            Edit
+          </button>
+          <button class="modal__close" id="modal-close">
+            <span class="material-icons-round">close</span>
+          </button>
+        </div>
       </div>
 
       <div class="modal__info">
@@ -134,6 +410,18 @@
         <span class="modal__total-label">Grand Total</span>
         <span class="modal__total-value" id="modal-total">₹ 0.00</span>
       </div>
+
+      <div class="modal__footer" id="invoice-edit-footer"
+        style="display: none; border-top: 1px solid var(--border-subtle); padding: 16px 24px; justify-content: flex-end; gap: 12px;">
+        <button class="btn btn--secondary" id="invoice-cancel-btn">
+          <span class="material-icons-round">close</span>
+          Cancel
+        </button>
+        <button class="btn btn--primary" id="invoice-save-btn">
+          <span class="material-icons-round">save</span>
+          Save Changes
+        </button>
+      </div>
     </div>
   </div>
 
@@ -154,11 +442,13 @@
             <span class="material-icons-round">picture_as_pdf</span>
             Download PDF
           </button>
-          <button class="btn-detail-action btn-detail-action--save" id="detail-save-btn" style="display:none;" title="Save Changes">
+          <button class="btn-detail-action btn-detail-action--save" id="detail-save-btn" style="display:none;"
+            title="Save Changes">
             <span class="material-icons-round">save</span>
             Save Changes
           </button>
-          <button class="btn-detail-action btn-detail-action--cancel" id="detail-cancel-btn" style="display:none;" title="Cancel Edit">
+          <button class="btn-detail-action btn-detail-action--cancel" id="detail-cancel-btn" style="display:none;"
+            title="Cancel Edit">
             <span class="material-icons-round">close</span>
             Cancel
           </button>
@@ -189,52 +479,49 @@
           </div>
         </div>
 
-        <!-- Contact Info -->
         <div class="detail-section">
           <div class="detail-section__title">
-            <span class="material-icons-round">contact_phone</span>
+            <span class="material-icons-round">contact_page</span>
             Contact Information
           </div>
           <div class="detail-grid">
             <div class="detail-item">
-              <span class="detail-item__icon material-icons-round">phone</span>
-              <div>
+              <span class="material-icons-round detail-item__icon">phone</span>
+              <div class="detail-item__content">
                 <div class="detail-item__label">Phone Number</div>
-                <div class="detail-item__value" id="detail-phone-val">—</div>
+                <div class="detail-item__value" id="detail-phone-val">9519155039</div>
               </div>
             </div>
             <div class="detail-item">
-              <span class="detail-item__icon material-icons-round">email</span>
-              <div>
+              <span class="material-icons-round detail-item__icon">email</span>
+              <div class="detail-item__content">
                 <div class="detail-item__label">Email Address</div>
-                <div class="detail-item__value" id="detail-email-val">—</div>
+                <div class="detail-item__value" id="detail-email-val">maurya33g@gmail.com</div>
               </div>
             </div>
             <div class="detail-item detail-item--full">
-              <span class="detail-item__icon material-icons-round">location_on</span>
-              <div>
+              <span class="material-icons-round detail-item__icon">location_on</span>
+              <div class="detail-item__content">
                 <div class="detail-item__label">Billing Address</div>
-                <div class="detail-item__value" id="detail-address-val">—</div>
+                <div class="detail-item__value" id="detail-address-val">karwar jodhpur</div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Purchase History (what they bought) -->
         <div class="detail-section">
           <div class="detail-section__title">
-            <span class="material-icons-round">shopping_bag</span>
-            Purchase History
+            <span class="material-icons-round">history</span>
+            Purchase History (Detailed)
           </div>
           <div id="detail-purchase-history">
-            <!-- Populated by JS -->
+            <!-- Populated via JS -->
           </div>
         </div>
 
-        <!-- Purchase Stats -->
         <div class="detail-section">
           <div class="detail-section__title">
-            <span class="material-icons-round">analytics</span>
+            <span class="material-icons-round">insights</span>
             Purchase Summary
           </div>
           <div class="detail-stats-grid">
@@ -244,24 +531,21 @@
               <div class="detail-stat-card__label">Total Invoices</div>
             </div>
             <div class="detail-stat-card">
-              <span class="material-icons-round detail-stat-card__icon detail-stat-card__icon--emerald">account_balance_wallet</span>
+              <span class="material-icons-round detail-stat-card__icon detail-stat-card__icon--emerald">payments</span>
               <div class="detail-stat-card__value" id="detail-total-spent">₹ 0</div>
               <div class="detail-stat-card__label">Total Spent</div>
             </div>
             <div class="detail-stat-card">
-              <span class="material-icons-round detail-stat-card__icon detail-stat-card__icon--purple">schedule</span>
+              <span
+                class="material-icons-round detail-stat-card__icon detail-stat-card__icon--purple">event_available</span>
               <div class="detail-stat-card__value" id="detail-last-visit">—</div>
               <div class="detail-stat-card__label">Last Visit</div>
             </div>
             <div class="detail-stat-card">
-              <span class="material-icons-round detail-stat-card__icon detail-stat-card__icon--orange">trending_up</span>
+              <span
+                class="material-icons-round detail-stat-card__icon detail-stat-card__icon--orange">trending_up</span>
               <div class="detail-stat-card__value" id="detail-avg-order">₹ 0</div>
               <div class="detail-stat-card__label">Avg. Order Value</div>
-            </div>
-            <div class="detail-stat-card detail-stat-card--dues">
-              <span class="material-icons-round detail-stat-card__icon detail-stat-card__icon--rose">account_balance</span>
-              <div class="detail-stat-card__value" id="detail-total-dues">₹ 0</div>
-              <div class="detail-stat-card__label">Pending Balance</div>
             </div>
           </div>
         </div>
@@ -274,22 +558,93 @@
             <span class="material-icons-round">edit_note</span>
             Edit Customer Information
           </div>
-          <div class="form-group">
-            <label class="form-label" for="edit-name">Customer Name</label>
-            <input type="text" class="form-input" id="edit-name" placeholder="Enter customer name" autocomplete="off">
+          <div class="detail-edit-row">
+            <div class="form-group">
+              <label class="form-label" for="edit-name">Customer Name</label>
+              <input type="text" class="form-input" id="edit-name" placeholder="Enter customer name" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-phone">Phone Number</label>
+              <input type="tel" id="edit-phone" class="form-input" placeholder="Enter 10-digit number" maxlength="25"
+                inputmode="numeric" autocomplete="off">
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="edit-phone">Phone Number</label>
-            <input type="tel" id="edit-phone" class="form-input" placeholder="Enter 10-digit number" maxlength="10" inputmode="numeric" autocomplete="off">
+          <div class="detail-edit-row">
+            <div class="form-group">
+              <label class="form-label" for="edit-email">Email Address</label>
+              <input type="email" class="form-input" id="edit-email" placeholder="Enter email address"
+                autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-address">Billing Address</label>
+              <textarea class="form-input form-textarea" id="edit-address" rows="1" placeholder="Enter billing address"
+                style="min-height: 46px;"></textarea>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="edit-email">Email Address</label>
-            <input type="email" class="form-input" id="edit-email" placeholder="Enter email address" autocomplete="off">
+        </div>
+
+        <div class="detail-section" style="border-top: 1px solid var(--border-subtle); padding-top: 20px;">
+          <div class="detail-section__title">
+            <span class="material-icons-round">history</span>
+            Recent Invoices (Click to Edit Items)
           </div>
-          <div class="form-group">
-            <label class="form-label" for="edit-address">Billing Address</label>
-            <textarea class="form-input form-textarea" id="edit-address" rows="3" placeholder="Enter billing address"></textarea>
+          <div id="detail-edit-purchase-history">
+            <!-- Populated via JS -->
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF Viewer Modal (Matches Bill History Style) -->
+  <div class="pdf-modal-overlay" id="invoice-pdf-modal">
+    <div class="pdf-modal-container">
+      <div class="pdf-modal-header">
+        <div style="display: flex; align-items: center;">
+          <button class="btn-pdf-action btn-pdf-action--close" id="btn-invoice-pdf-back" style="padding: 8px; border-radius: 50%; margin-right: 12px; width: 36px; height: 36px; justify-content: center;">
+            <span class="material-icons-round">arrow_back</span>
+          </button>
+          <h3>
+            <span class="material-icons-round">picture_as_pdf</span>
+            <span id="invoice-pdf-modal-title">Invoice Detail</span>
+          </h3>
+        </div>
+      </div>
+      <div class="pdf-modal-body" id="invoice-pdf-modal-body">
+        <div class="pdf-loading" id="invoice-pdf-loading">
+          <div class="spinner"></div>
+          <span style="margin-top: 16px;">Generating PDF preview...</span>
+        </div>
+        <!-- PDF will be embedded here -->
+      </div>
+      <div class="pdf-modal-footer">
+        <div class="pdf-modal-footer-left">
+          <div class="due-badge" id="invoice-pdf-due-badge">
+            <span class="material-icons-round">account_balance_wallet</span>
+            Due: <span id="invoice-pdf-due-amount">₹0.00</span>
+          </div>
+          <button class="btn-pdf-action btn-pdf-action--paid" id="btn-invoice-pdf-paid">
+            <span class="material-icons-round">check_circle</span>
+            Paid
+          </button>
+        </div>
+        <div class="pdf-modal-footer-right">
+          <button class="btn-pdf-action btn-pdf-action--edit" id="btn-invoice-pdf-edit">
+            <span class="material-icons-round">edit</span>
+            Edit
+          </button>
+          <button class="btn-pdf-action btn-pdf-action--delete" id="btn-invoice-pdf-delete">
+            <span class="material-icons-round">delete</span>
+            Delete
+          </button>
+          <button class="btn-pdf-action" id="btn-invoice-pdf-download">
+            <span class="material-icons-round">download</span>
+            Download
+          </button>
+          <button class="btn-pdf-action btn-pdf-action--close" id="btn-invoice-pdf-close">
+            <span class="material-icons-round">close</span>
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -297,5 +652,5 @@
 
   <script src="../scripts/customers.js"></script>
 </body>
-</html>
 
+</html>

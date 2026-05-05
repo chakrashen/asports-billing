@@ -34,7 +34,7 @@
 /* ─── Cards Grid ─────────────────────────────────────────── */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
   margin-bottom: 32px;
 }
@@ -52,9 +52,11 @@
 }
 
 .card:nth-child(1) { animation-delay: 0.1s; }
-.card:nth-child(2) { animation-delay: 0.2s; }
-.card:nth-child(3) { animation-delay: 0.3s; }
-.card:nth-child(4) { animation-delay: 0.4s; }
+.card:nth-child(2) { animation-delay: 0.15s; }
+.card:nth-child(3) { animation-delay: 0.2s; }
+.card:nth-child(4) { animation-delay: 0.25s; }
+.card:nth-child(5) { animation-delay: 0.3s; }
+.card:nth-child(6) { animation-delay: 0.35s; }
 
 .card__glow {
   position: absolute;
@@ -84,6 +86,12 @@
 .card--history .card__glow {
   background: radial-gradient(circle at 30% 30%, rgba(251,146,60,0.06) 0%, transparent 60%);
 }
+.card--ledger .card__glow {
+  background: radial-gradient(circle at 30% 30%, rgba(244,63,94,0.06) 0%, transparent 60%);
+}
+.card--stock .card__glow {
+  background: radial-gradient(circle at 30% 30%, rgba(252,211,77,0.06) 0%, transparent 60%);
+}
 
 .card:hover {
   transform: translateY(-4px);
@@ -109,6 +117,16 @@
 .card--history:hover {
   border-color: rgba(251,146,60,0.2);
   box-shadow: 0 8px 40px rgba(251,146,60,0.08);
+}
+
+.card--ledger:hover {
+  border-color: rgba(244,63,94,0.2);
+  box-shadow: 0 8px 40px rgba(244,63,94,0.08);
+}
+
+.card--stock:hover {
+  border-color: rgba(252,211,77,0.2);
+  box-shadow: 0 8px 40px rgba(252,211,77,0.08);
 }
 
 .card__icon-wrap {
@@ -138,6 +156,12 @@
 .card--history .card__icon-wrap {
   background: var(--accent-orange-dim);
 }
+.card--ledger .card__icon-wrap {
+  background: var(--accent-rose-dim);
+}
+.card--stock .card__icon-wrap {
+  background: var(--accent-amber-dim);
+}
 
 .card__icon {
   font-size: 26px;
@@ -147,6 +171,8 @@
 .card--order .card__icon { color: var(--accent-purple); }
 .card--update .card__icon { color: var(--accent-emerald); }
 .card--history .card__icon { color: var(--accent-orange); }
+.card--ledger .card__icon { color: var(--accent-rose); }
+.card--stock .card__icon { color: var(--accent-amber); }
 
 .card__title {
   font-family: 'Outfit', sans-serif;
@@ -211,6 +237,14 @@
 .card--history:hover .card__arrow {
   background: var(--accent-orange-dim);
   color: var(--accent-orange);
+}
+.card--ledger:hover .card__arrow {
+  background: var(--accent-rose-dim);
+  color: var(--accent-rose);
+}
+.card--stock:hover .card__arrow {
+  background: var(--accent-amber-dim);
+  color: var(--accent-amber);
 }
 
 .card__arrow .material-icons-round {

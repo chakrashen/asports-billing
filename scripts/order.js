@@ -159,6 +159,12 @@ function showOrderModal(data) {
         </tbody>
       </table>
       
+      <!-- Terms & conditions -->
+      <div style="padding:8px; border-bottom:1px solid #000; font-size:11px;">
+        <strong style="font-size:12px;">Terms & conditions</strong><br>
+        Subject to 'jodhpur' Jurisdiction only.
+      </div>
+      
       <!-- Signatory -->
       <div style="padding:10px; height: 80px; display:flex; flex-direction:column; justify-content:space-between;">
         <strong>For : ASPORTS ZONE</strong>
@@ -189,8 +195,13 @@ btnGenerate.addEventListener('click', async () => {
   const email = document.getElementById('supplier-email').value.trim();
   const address = document.getElementById('supplier-address').value.trim();
 
-  if (!supplierName) {
-    showToast('Please enter supplier name', true);
+  if (!supplierName || !phone) {
+    showToast('Please enter supplier name and phone number', true);
+    return;
+  }
+
+  if (phone.length > 25) {
+    showToast('Phone number cannot exceed 25 digits', true);
     return;
   }
 

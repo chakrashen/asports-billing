@@ -5,6 +5,7 @@
 let allCustomers = []; // { name, invoices: [...], totalAmount, invoiceCount, lastDate, phone, email, address, totalDues }
 let currentFilter = 'all'; // 'all' or 'dues'
 let currentView = 'invoices'; // 'customers' or 'invoices'
+let currentEditingInvoiceId = null;
 
 // ─── Clock ──────────────────────────────────────────────────
 function updateClock() {
@@ -125,26 +126,31 @@ function updateSummary(customers, invoices) {
 
 function applyFilters() {
   const query = document.getElementById('search-input').value.toLowerCase().trim();
-  
+
   if (currentView === 'invoices') {
     // Get all invoices from all customers
     let allInvoices = [];
     allCustomers.forEach(c => {
       allInvoices = allInvoices.concat(c.invoices);
     });
-    
+
     // Sort by id DESC (most recent on top)
     allInvoices.sort((a, b) => b.id - a.id);
-    
+
     // Apply search filter
     if (query) {
-      allInvoices = allInvoices.filter(inv => 
-        inv.customer_name.toLowerCase().includes(query) || 
+      allInvoices = allInvoices.filter(inv =>
+        inv.customer_name.toLowerCase().includes(query) ||
         (inv.invoice_number && inv.invoice_number.toString().includes(query)) ||
         inv.id.toString().includes(query)
       );
     }
-    
+
+    // Apply status filter (Outstanding)
+    if (currentFilter === 'dues') {
+      allInvoices = allInvoices.filter(inv => (inv.due_amount || 0) > 0);
+    }
+
     renderInvoices(allInvoices);
     return;
   }
@@ -180,8 +186,8 @@ function renderInvoices(invoices) {
   emptyState.style.display = 'none';
 
   container.innerHTML = `
-    <div class="invoice-directory-table" style="width:100%; background: rgba(18, 20, 45, 0.4); border-radius: 16px; border: 1px solid var(--border-subtle); overflow: hidden;">
-      <div class="table-header" style="display: grid; grid-template-columns: 140px 1fr 150px 140px 80px; padding: 16px 24px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-subtle); font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">
+    <div class="invoice-directory-table" style="width:100%; background: rgba(18, 20, 45, 0.4); border-radius: 16px; border: 1px solid var(--border-subtle); overflow: visible;">
+      <div class="table-header" style="display: grid; grid-template-columns: 140px 1fr 150px 140px 80px; padding: 18px 24px; background: #0d0d21; border-bottom: 1px solid var(--border-subtle); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 10; border-radius: 16px 16px 0 0;">
         <div>Invoice No.</div>
         <div>Customer Name</div>
         <div style="text-align: right;">Amount</div>
@@ -190,15 +196,15 @@ function renderInvoices(invoices) {
       </div>
       <div id="invoice-rows-container">
         ${invoices.map(inv => {
-          const invNum = inv.invoice_number ? `#${inv.invoice_number}` : `#${inv.id}`;
-          const amountStr = inv.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 });
-          return `
+    const invNum = inv.invoice_number ? `#${inv.invoice_number}` : `#${inv.id}`;
+    const amountStr = inv.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    return `
             <div class="invoice-directory-row" style="display: grid; grid-template-columns: 140px 1fr 150px 140px 80px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center; transition: background 0.2s ease;">
               <div style="font-weight: 800; color: var(--accent-cyan); font-family: 'Outfit', sans-serif;">${invNum}</div>
               <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(inv.customer_name)}</div>
               <div style="text-align: right; font-weight: 700; color: var(--text-primary); font-family: 'Outfit', sans-serif;">₹ ${amountStr}</div>
               <div style="text-align: center;">
-                <button onclick="openCustomerByName('${escapeHtml(inv.customer_name)}')" style="background: var(--accent-cyan-dim); color: var(--accent-cyan); border: 1px solid rgba(0, 229, 255, 0.2); padding: 6px 12px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; transition: all 0.2s ease;" onmouseover="this.style.background='var(--accent-cyan)'; this.style.color='#000'" onmouseout="this.style.background='var(--accent-cyan-dim)'; this.style.color='var(--accent-cyan)'">
+                <button onclick="openInvoiceModal(${inv.id})" style="background: var(--accent-cyan-dim); color: var(--accent-cyan); border: 1px solid rgba(0, 229, 255, 0.2); padding: 6px 12px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; transition: all 0.2s ease;" onmouseover="this.style.background='var(--accent-cyan)'; this.style.color='#000'" onmouseout="this.style.background='var(--accent-cyan-dim)'; this.style.color='var(--accent-cyan)'">
                   <span class="material-icons-round" style="font-size: 16px;">visibility</span>
                   View Detail
                 </button>
@@ -210,7 +216,7 @@ function renderInvoices(invoices) {
               </div>
             </div>
           `;
-        }).join('')}
+  }).join('')}
       </div>
     </div>
   `;
@@ -368,7 +374,7 @@ function openCustomerDetailModal(cust) {
 
   document.getElementById('detail-total-invoices').textContent = cust.invoiceCount;
   document.getElementById('detail-total-spent').textContent = '₹ ' + cust.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 });
-  document.getElementById('detail-total-dues').textContent = '₹ ' + (cust.totalDues || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+  // Total dues is already shown in the header pill id="detail-due-val"
   document.getElementById('detail-last-visit').textContent = formatDate(cust.lastDate);
 
   const avgVal = cust.invoiceCount > 0 ? (cust.totalAmount / cust.invoiceCount) : 0;
@@ -377,10 +383,10 @@ function openCustomerDetailModal(cust) {
   // Update Header Due Pill
   const duePill = document.getElementById('detail-due-pill');
   const markPaidBtn = document.getElementById('btn-mark-paid');
-  
+
   duePill.style.display = 'flex';
   document.getElementById('detail-due-val').textContent = '₹ ' + (cust.totalDues || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
-  
+
   if (cust.totalDues > 0) {
     duePill.classList.remove('is-paid');
     markPaidBtn.style.display = 'flex';
@@ -392,6 +398,7 @@ function openCustomerDetailModal(cust) {
   // Populate purchase history (what they bought)
   const historyContainer = document.getElementById('detail-purchase-history');
   let historyHTML = '';
+  let editHistoryHTML = '';
 
   // Sort invoices by date/id descending to ensure most recent is on top
   const sortedInvoices = [...cust.invoices].sort((a, b) => b.id - a.id);
@@ -401,21 +408,87 @@ function openCustomerDetailModal(cust) {
     const invTotal = inv.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 });
     const invNum = inv.invoice_number ? `#${inv.invoice_number}` : `#${inv.id}`;
 
-    historyHTML += `
-      <div class="purchase-invoice-block" style="margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; overflow: hidden;">
-        <div class="purchase-invoice-header" style="padding: 12px 16px; background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: space-between;">
-          <div class="purchase-invoice-header__left" style="display: flex; align-items: center; gap: 12px;">
-            <span class="purchase-invoice-id" style="font-weight: 800; color: var(--accent-cyan); font-family: 'Outfit', sans-serif;">${invNum}</span>
-            <span class="purchase-invoice-customer" style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">${escapeHtml(cust.name)}</span>
-            <span class="purchase-invoice-date" style="font-size: 0.75rem; color: var(--text-muted); margin-left: 8px;">${dateStr}</span>
+    // View Mode Items
+    const itemsViewHTML = (inv.items && inv.items.length > 0)
+      ? inv.items.map((it, idx) => `
+          <div class="purchase-item">
+            <span class="purchase-item__num">${idx + 1}</span>
+            <span class="purchase-item__name">${escapeHtml(it.product)}</span>
+            <span class="purchase-item__qty">${it.qty} × ₹${it.price.toLocaleString('en-IN')}</span>
+            <span class="purchase-item__total">₹${(it.qty * it.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
           </div>
-          <span class="purchase-invoice-total" style="font-weight: 800; color: var(--accent-emerald); font-family: 'Outfit', sans-serif;">₹ ${invTotal}</span>
+        `).join('')
+      : '<div class="purchase-item purchase-item--empty">No items recorded</div>';
+
+    // Edit Mode Items (Inputs)
+    const itemsEditHTML = (inv.items && inv.items.length > 0)
+      ? inv.items.map((it, idx) => `
+          <div class="purchase-item editable-row" data-invoice-id="${inv.id}">
+            <span class="purchase-item__num">${idx + 1}</span>
+            <input type="text" class="purchase-item-input purchase-item-input--name" value="${escapeHtml(it.product)}" placeholder="Product Name">
+            <input type="number" class="purchase-item-input purchase-item-input--qty" value="${it.qty}" placeholder="Qty">
+            <input type="number" class="purchase-item-input purchase-item-input--price" value="${it.price}" step="0.01" placeholder="Price">
+            <button class="btn-remove-item" title="Remove Item" onclick="this.closest('.purchase-item').remove()">
+              <span class="material-icons-round">close</span>
+            </button>
+          </div>
+        `).join('')
+      : '<div class="purchase-item purchase-item--empty">No items recorded</div>';
+
+    historyHTML += `
+      <div class="purchase-invoice-block">
+        <div class="purchase-invoice-header">
+          <div class="purchase-invoice-header__left">
+            <span class="purchase-invoice-id">${invNum}</span>
+            <span class="purchase-invoice-date">${dateStr}</span>
+          </div>
+          <div style="text-align: right;">
+            <span class="detail-item__label" style="margin-bottom: 0;">Total Amount</span>
+            <span class="purchase-invoice-total">₹ ${invTotal}</span>
+          </div>
+        </div>
+        <div class="purchase-items-list">
+          <div class="detail-section__title" style="font-size: 0.6rem; margin-bottom: 8px;">
+            <span class="material-icons-round" style="font-size: 14px;">shopping_cart</span>
+            Products List
+          </div>
+          ${itemsViewHTML}
+        </div>
+      </div>
+    `;
+
+    editHistoryHTML += `
+      <div class="purchase-invoice-block" data-invoice-id="${inv.id}">
+        <div class="purchase-invoice-header">
+          <div class="purchase-invoice-header__left">
+            <span class="purchase-invoice-id">${invNum}</span>
+            <span class="purchase-invoice-date">${dateStr}</span>
+          </div>
+          <div style="text-align: right;">
+            <span class="detail-item__label" style="margin-bottom: 0;">Total Amount</span>
+            <span class="purchase-invoice-total">₹ ${invTotal}</span>
+          </div>
+        </div>
+        <div class="purchase-items-list edit-items-container">
+          <div class="detail-section__title" style="font-size: 0.6rem; margin-bottom: 8px;">
+            <span class="material-icons-round" style="font-size: 14px;">edit_note</span>
+            Edit Products
+          </div>
+          ${itemsEditHTML}
         </div>
       </div>
     `;
   });
 
-  historyContainer.innerHTML = historyHTML || '<p style="color:var(--text-muted);text-align:center;padding:16px;">No purchase history</p>';
+  if (!historyHTML) historyHTML = '<p style="color:var(--text-muted);text-align:center;padding:16px;">No purchase history</p>';
+  if (!editHistoryHTML) editHistoryHTML = '<p style="color:var(--text-muted);text-align:center;padding:16px;">No purchase history</p>';
+
+  historyContainer.innerHTML = historyHTML;
+
+  const editHistoryContainer = document.getElementById('detail-edit-purchase-history');
+  if (editHistoryContainer) {
+    editHistoryContainer.innerHTML = historyHTML;
+  }
 
   // Populate edit form fields
   document.getElementById('edit-name').value = cust.name;
@@ -486,11 +559,7 @@ document.getElementById('detail-save-btn').addEventListener('click', async () =>
     return;
   }
 
-  if (newPhone && newPhone.length !== 10) {
-    showToast('Phone number must be exactly 10 digits', true);
-    document.getElementById('edit-phone').focus();
-    return;
-  }
+  // Phone length validation removed to support up to 25 digits as per latest requirements.
 
   const saveBtn = document.getElementById('detail-save-btn');
   saveBtn.disabled = true;
@@ -508,7 +577,28 @@ document.getElementById('detail-save-btn').addEventListener('click', async () =>
     });
 
     if (result.success) {
-      showToast('Customer details saved successfully!');
+      // 2. Update Invoice Items if any
+      const editBlocks = document.querySelectorAll('#detail-edit-purchase-history .purchase-invoice-block');
+      for (const block of editBlocks) {
+        const invId = parseInt(block.dataset.invoiceId);
+        const rows = block.querySelectorAll('.editable-row');
+        const items = [];
+
+        rows.forEach(row => {
+          const name = row.querySelector('.purchase-item-input--name').value.trim();
+          const qty = parseInt(row.querySelector('.purchase-item-input--qty').value) || 0;
+          const price = parseFloat(row.querySelector('.purchase-item-input--price').value) || 0;
+
+          if (name) {
+            items.push({ product: name, qty, price });
+          }
+        });
+
+        // Always update the invoice, even if items are empty (in case user deleted all items)
+        await window.api.updateInvoiceItems(invId, items);
+      }
+
+      showToast('Customer and product details saved successfully!');
       closeDetailModal();
       // Reload the customer list to reflect changes
       await loadCustomers();
@@ -560,7 +650,8 @@ document.getElementById('detail-pdf-btn').addEventListener('click', async () => 
       items: items.map(it => ({
         product: it.product,
         qty: it.qty,
-        price: it.price
+        price: it.price,
+        gstPercent: it.gst_percent || it.gstPercent || 0
       }))
     });
 
@@ -578,11 +669,135 @@ document.getElementById('detail-pdf-btn').addEventListener('click', async () => 
   }
 });
 
-// ─── Invoice Detail Modal ───────────────────────────────────
+// ─── Invoice Detail Modal (PDF View) ─────────────────────────
+let currentPdfInvoiceId = null;
+let currentPdfPath = null;
+
 async function openInvoiceModal(invoiceId) {
+  currentPdfInvoiceId = invoiceId;
+  const modal = document.getElementById('invoice-pdf-modal');
+  const body = document.getElementById('invoice-pdf-modal-body');
+  const loading = document.getElementById('invoice-pdf-loading');
+  
+  modal.classList.add('show');
+  loading.style.display = 'flex';
+  body.querySelectorAll('embed').forEach(e => e.remove());
+  
+  // Find invoice data
+  let invoice = null;
+  for (const cust of allCustomers) {
+    invoice = cust.invoices.find(i => i.id === invoiceId);
+    if (invoice) break;
+  }
+  if (!invoice) {
+    body.innerHTML = '<p style="color: var(--accent-rose); text-align: center; padding: 40px;">Invoice not found.</p>';
+    return;
+  }
+
+  document.getElementById('invoice-pdf-modal-title').textContent = `Invoice Detail — ${invoice.customer_name}`;
+  document.getElementById('invoice-pdf-due-amount').textContent = `₹${(invoice.due_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+
+  const paidBtn = document.getElementById('btn-invoice-pdf-paid');
+  if ((invoice.due_amount || 0) > 0) {
+    paidBtn.style.display = 'inline-flex';
+  } else {
+    paidBtn.style.display = 'none';
+  }
+
+  // Generate and display PDF
+  try {
+    const pdfResult = await window.api.downloadInvoicePdf({
+      customerName: invoice.customer_name,
+      phone: invoice.phone_number,
+      email: invoice.email,
+      address: invoice.billing_address,
+      invoiceNumber: invoice.invoice_number || invoice.id,
+      totalAmount: invoice.total_amount,
+      discount: invoice.discount || 0,
+      paidAmount: invoice.paid_amount || 0,
+      dueAmount: invoice.due_amount || 0,
+      items: invoice.items.map(item => ({
+        product: item.product,
+        qty: item.qty,
+        price: item.price,
+        gstPercent: item.gst_percent || 0
+      }))
+    });
+
+    if (pdfResult.success) {
+      currentPdfPath = pdfResult.filePath;
+      const readResult = await window.api.readInvoicePdf(pdfResult.filePath);
+      if (readResult.success) {
+        const blob = new Blob([readResult.data], { type: 'application/pdf' });
+        const dataUrl = URL.createObjectURL(blob);
+        loading.style.display = 'none';
+        body.innerHTML += `<embed src="${dataUrl}" type="application/pdf" style="width: 100%; height: 100%; border-radius: 8px;">`;
+      } else {
+        throw new Error('Failed to read generated PDF');
+      }
+    } else {
+      throw new Error(pdfResult.error || 'PDF generation failed');
+    }
+  } catch (err) {
+    loading.style.display = 'none';
+    body.innerHTML = `<p style="color: var(--accent-rose); text-align: center; padding: 40px;">Error: ${err.message}</p>`;
+  }
+}
+
+// PDF Modal Listeners
+document.getElementById('btn-invoice-pdf-close').addEventListener('click', () => {
+  document.getElementById('invoice-pdf-modal').classList.remove('show');
+});
+document.getElementById('btn-invoice-pdf-back').addEventListener('click', () => {
+  document.getElementById('invoice-pdf-modal').classList.remove('show');
+});
+
+document.getElementById('btn-invoice-pdf-download').addEventListener('click', () => {
+  window.api.openInvoicesFolder();
+});
+
+document.getElementById('btn-invoice-pdf-delete').addEventListener('click', async () => {
+  if (!currentPdfInvoiceId) return;
+  if (confirm('Are you sure you want to delete this invoice?')) {
+    const result = await window.api.deleteInvoice(currentPdfInvoiceId);
+    if (result.success) {
+      document.getElementById('invoice-pdf-modal').classList.remove('show');
+      loadAllInvoices();
+    } else {
+      alert('Error deleting invoice: ' + result.error);
+    }
+  }
+});
+
+document.getElementById('btn-invoice-pdf-edit').addEventListener('click', () => {
+  if (!currentPdfInvoiceId) return;
+  document.getElementById('invoice-pdf-modal').classList.remove('show');
+  openInvoiceEditModal(currentPdfInvoiceId);
+});
+
+document.getElementById('btn-invoice-pdf-paid').addEventListener('click', async () => {
+  if (!currentPdfInvoiceId) return;
+  if (confirm('Mark this invoice as fully paid?')) {
+    const result = await window.api.clearInvoiceDues(currentPdfInvoiceId);
+    if (result.success) {
+      showToast('Invoice marked as paid!');
+      await loadCustomers(); // Refresh all data including in-memory allCustomers
+      openInvoiceModal(currentPdfInvoiceId); // Refresh PDF view
+    } else {
+      showToast('Error: ' + result.error, true);
+    }
+  }
+});
+
+// ─── Invoice Edit Modal (Old Table Style) ───────────────────
+async function openInvoiceEditModal(invoiceId) {
+  currentEditingInvoiceId = invoiceId;
   const overlay = document.getElementById('modal-overlay');
 
-  // Find the invoice data from allCustomers
+  // Ensure we're in edit mode
+  setInvoiceEditMode('edit');
+
+  // Find the invoice data
   let invoice = null;
   for (const cust of allCustomers) {
     invoice = cust.invoices.find(i => i.id === invoiceId);
@@ -592,12 +807,12 @@ async function openInvoiceModal(invoiceId) {
 
   document.getElementById('modal-invoice-id').textContent = '#' + invoice.id;
   document.getElementById('modal-customer').textContent = invoice.customer_name;
-  
+
   // New details
   const phoneVal = invoice.phone_number || '—';
   const emailVal = invoice.email || '—';
   const addressVal = invoice.billing_address || '—';
-  
+
   document.getElementById('modal-phone').textContent = phoneVal;
   document.getElementById('modal-email').textContent = emailVal;
   document.getElementById('modal-address').textContent = addressVal;
@@ -613,6 +828,8 @@ async function openInvoiceModal(invoiceId) {
   const itemsBody = document.getElementById('modal-items-body');
 
   if (invoice.items && invoice.items.length > 0) {
+    // Note: setInvoiceEditMode('edit') will be called after this in some flows, 
+    // but here we need to populate the rows first so setInvoiceEditMode can convert them to inputs.
     itemsBody.innerHTML = invoice.items.map((item, idx) => {
       const itemTotal = item.qty * item.price;
       return `
@@ -625,12 +842,106 @@ async function openInvoiceModal(invoiceId) {
         </tr>
       `;
     }).join('');
+    
+    // Now convert them to inputs since we are in edit mode
+    setInvoiceEditMode('edit');
   } else {
     itemsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No items</td></tr>';
   }
 
   overlay.classList.add('show');
 }
+
+function setInvoiceEditMode(mode) {
+  const editBtn = document.getElementById('invoice-edit-btn');
+  const footer = document.getElementById('invoice-edit-footer');
+  const itemsBody = document.getElementById('modal-items-body');
+
+  if (mode === 'edit') {
+    if (editBtn) editBtn.style.display = 'none';
+    if (footer) footer.style.display = 'flex';
+
+    // Turn table rows into inputs
+    const rows = itemsBody.querySelectorAll('tr');
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('td');
+      if (cells.length < 5) return; // Skip "No items" row
+
+      const productName = cells[1].textContent;
+      const qty = cells[2].textContent;
+      const price = cells[3].textContent.replace('₹ ', '').replace(/,/g, '');
+
+      cells[1].innerHTML = `<input type="text" class="table-input" value="${escapeHtml(productName)}" style="padding: 4px 8px; font-size: 0.85rem;">`;
+      cells[2].innerHTML = `<input type="number" class="table-input" value="${qty}" style="padding: 4px 8px; font-size: 0.85rem; text-align: right;">`;
+      cells[3].innerHTML = `<input type="number" class="table-input" value="${price}" step="0.01" style="padding: 4px 8px; font-size: 0.85rem; text-align: right;">`;
+    });
+  } else {
+    if (editBtn) editBtn.style.display = 'inline-flex';
+    if (footer) footer.style.display = 'none';
+  }
+}
+
+// Edit Invoice button (on the old modal if visible)
+if (document.getElementById('invoice-edit-btn')) {
+  document.getElementById('invoice-edit-btn').addEventListener('click', () => {
+    setInvoiceEditMode('edit');
+  });
+}
+
+// Cancel Invoice edit
+
+document.getElementById('invoice-cancel-btn').addEventListener('click', () => {
+  if (currentEditingInvoiceId) {
+    document.getElementById('modal-overlay').classList.remove('show');
+    openInvoiceModal(currentEditingInvoiceId);
+  }
+});
+
+// Save Invoice edit
+document.getElementById('invoice-save-btn').addEventListener('click', async () => {
+  if (!currentEditingInvoiceId) return;
+
+  const itemsBody = document.getElementById('modal-items-body');
+  const rows = itemsBody.querySelectorAll('tr');
+  const newItems = [];
+
+  rows.forEach(row => {
+    const inputs = row.querySelectorAll('input');
+    if (inputs.length === 3) {
+      newItems.push({
+        product: inputs[0].value.trim(),
+        qty: parseInt(inputs[1].value) || 0,
+        price: parseFloat(inputs[2].value) || 0
+      });
+    }
+  });
+
+  if (newItems.length === 0) {
+    showToast('Invoice must have at least one item', true);
+    return;
+  }
+
+  const saveBtn = document.getElementById('invoice-save-btn');
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<span class="material-icons-round spinner">sync</span> Saving...';
+
+  try {
+    const result = await window.api.updateInvoiceItems(currentEditingInvoiceId, newItems);
+    if (result.success) {
+      showToast('Invoice updated successfully!');
+      await loadCustomers(); // Refresh data
+      openInvoiceModal(currentEditingInvoiceId); // Back to view mode with new data
+    } else {
+      showToast('Update failed: ' + result.error, true);
+    }
+  } catch (err) {
+    console.error('Update items error:', err);
+    showToast('Error updating invoice items', true);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '<span class="material-icons-round">save</span> Save Changes';
+  }
+});
 
 // ─── Close Invoice Modal ────────────────────────────────────
 document.getElementById('modal-close').addEventListener('click', closeModal);
@@ -658,7 +969,7 @@ document.getElementById('search-input').addEventListener('input', () => {
 
 
 document.getElementById('filter-dues').addEventListener('click', () => {
-  currentView = 'customers';
+  currentView = 'invoices';
   currentFilter = 'dues';
   document.getElementById('filter-dues').classList.add('is-active');
   document.getElementById('summary-invoices').classList.remove('is-active');
@@ -667,6 +978,7 @@ document.getElementById('filter-dues').addEventListener('click', () => {
 
 document.getElementById('summary-invoices').addEventListener('click', () => {
   currentView = 'invoices';
+  currentFilter = 'all';
   document.getElementById('filter-dues').classList.remove('is-active');
   document.getElementById('summary-invoices').classList.add('is-active');
   applyFilters();
@@ -736,7 +1048,7 @@ function escapeHtml(str) {
 // ─── Mark Paid Shortcut ─────────────────────────────────────
 document.getElementById('btn-mark-paid').addEventListener('click', async () => {
   if (!currentDetailCustomer) return;
-  
+
   const confirmed = confirm(`Are you sure you want to mark all pending dues as PAID for ${currentDetailCustomer.name}?`);
   if (!confirmed) return;
 
@@ -748,11 +1060,11 @@ document.getElementById('btn-mark-paid').addEventListener('click', async () => {
   try {
     // We use name and phone for accurate identification
     const result = await window.api.clearCustomerDues(currentDetailCustomer.name, currentDetailCustomer.phone);
-    
+
     if (result && result.success) {
       // Reload everything to refresh UI
       await loadCustomers();
-      
+
       // Update the current modal view if the customer is still the same
       const updatedCust = allCustomers.find(c => c.name.toLowerCase() === currentDetailCustomer.name.toLowerCase());
       if (updatedCust) {
@@ -760,7 +1072,7 @@ document.getElementById('btn-mark-paid').addEventListener('click', async () => {
       } else {
         document.getElementById('detail-modal-overlay').classList.remove('show');
       }
-      
+
       alert('All dues cleared successfully!');
     } else {
       alert('Failed to clear dues: ' + (result?.error || 'Unknown error'));

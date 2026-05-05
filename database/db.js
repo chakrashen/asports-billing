@@ -117,6 +117,24 @@ try {
 try {
   db.exec("ALTER TABLE purchase_bills ADD COLUMN due_amount REAL DEFAULT 0");
 } catch (e) { }
+try {
+  db.exec("ALTER TABLE purchase_bills ADD COLUMN remarks TEXT");
+} catch (e) { }
+try {
+  db.exec("ALTER TABLE purchase_bills ADD COLUMN discount REAL DEFAULT 0");
+} catch (e) { }
+try {
+  db.exec("ALTER TABLE purchase_bills ADD COLUMN show_remarks_pdf INTEGER DEFAULT 1");
+} catch (e) { }
+
+// Migration: Add gst_percent column to sales_items (Try adding it first in case table exists)
+try {
+  db.exec("ALTER TABLE sales_items ADD COLUMN gst_percent REAL DEFAULT 0");
+} catch (e) { }
+
+try {
+  db.exec("ALTER TABLE sales_invoices ADD COLUMN discount REAL DEFAULT 0");
+} catch (e) { }
 
 // Migration: Add gst_percent column to purchase_items (Try adding it first in case table exists)
 try {
@@ -134,5 +152,34 @@ db.exec(`
     FOREIGN KEY (bill_id) REFERENCES purchase_bills(id) ON DELETE CASCADE
   );
 `);
+
+// ─── Bill Edit History (Audit Trail) ─────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS bill_edit_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bill_id INTEGER NOT NULL,
+    edit_group TEXT NOT NULL,
+    field_name TEXT NOT NULL,
+    old_value TEXT,
+    new_value TEXT,
+    changed_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (bill_id) REFERENCES purchase_bills(id) ON DELETE CASCADE
+  );
+`);
+// ─── App Settings (password, email config) ───────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
+`);
+
+// Seed defaults if not present
+const seedSetting = db.prepare('INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)');
+seedSetting.run('edit_password', 'asports@2026');
+// Config values — always update to match code on restart
+const updateSetting = db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)');
+updateSetting.run('registered_email', 'b24bs1541@iitj.ac.in');
+updateSetting.run('smtp_app_password', 'yvbu onko goez gdcq');
 
 module.exports = db;

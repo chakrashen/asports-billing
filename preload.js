@@ -26,9 +26,11 @@ contextBridge.exposeInMainWorld('api', {
   getAnalytics: () => ipcRenderer.invoke('get-analytics'),
   getNextInvoiceNumber: () => ipcRenderer.invoke('get-next-invoice-number'),
   updateCustomerDetails: (data) => ipcRenderer.invoke('update-customer-details', data),
+  updateInvoiceItems: (invoiceId, items) => ipcRenderer.invoke('update-invoice-items', { invoiceId, items }),
   printInvoice: (data) => ipcRenderer.invoke('print-invoice', data),
   getPrinters: () => ipcRenderer.invoke('get-printers'),
   clearCustomerDues: (name, phone) => ipcRenderer.invoke('clear-customer-dues', { name, phone }),
+  clearInvoiceDues: (invoiceId) => ipcRenderer.invoke('clear-invoice-dues', invoiceId),
   downloadOrderPdf: (data) => ipcRenderer.invoke('download-order-pdf', data),
   readOrderPdf: (filePath) => ipcRenderer.invoke('read-order-pdf', filePath),
   openOrdersFolder: () => ipcRenderer.invoke('open-orders-folder'),
@@ -40,5 +42,17 @@ contextBridge.exposeInMainWorld('api', {
   clearBillDues: (billId) => ipcRenderer.invoke('clear-bill-dues', billId),
   deleteBill: (billId) => ipcRenderer.invoke('delete-bill', billId),
   readBillPdf: (filePath) => ipcRenderer.invoke('read-order-pdf', filePath),
-  getDueBillsByDate: () => ipcRenderer.invoke('get-due-bills-by-date')
+  getDueBillsByDate: () => ipcRenderer.invoke('get-due-bills-by-date'),
+  updateBill: (data) => ipcRenderer.invoke('update-bill', data),
+  getBillEditHistory: (billId) => ipcRenderer.invoke('get-bill-edit-history', billId),
+  getEditPassword: () => ipcRenderer.invoke('get-edit-password'),
+  updateEditPassword: (pw) => ipcRenderer.invoke('update-edit-password', pw),
+  getRegisteredEmail: () => ipcRenderer.invoke('get-registered-email'),
+  sendOtp: (email) => ipcRenderer.invoke('send-otp', email),
+  verifyOtp: (otp) => ipcRenderer.invoke('verify-otp', otp),
+  searchShopifyProducts: (query, searchBy) => ipcRenderer.invoke('shopify-search-products', { query, searchBy }),
+  getShopifyProduct: (productId) => ipcRenderer.invoke('shopify-get-product', productId),
+  getSupplierLedgers: () => ipcRenderer.invoke('get-supplier-ledgers'),
+  // Auto-update listener
+  onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, data) => callback(data))
 });

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ledger — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/supplier_ledger.css">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+
+<body>
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <div class="app-container">
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">menu_book</span>
+          <div>
+            <h1 class="header__title">Ledger</h1>
+            <p class="header__subtitle">Supplier Accounts</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <main class="sl-main">
+      <!-- Search & Stats -->
+      <div class="sl-toolbar">
+        <div class="sl-search-box">
+          <span class="material-icons-round sl-search-box__icon">search</span>
+          <input type="text" id="search-input" class="sl-search-box__input"
+            placeholder="Search suppliers..." autocomplete="off">
+        </div>
+        <div class="sl-stats" id="sl-stats">
+          <div class="sl-stat-chip sl-stat-chip--cyan">
+            <span class="material-icons-round">groups</span>
+            <span class="sl-stat-chip__value" id="stat-suppliers">0</span> Suppliers
+          </div>
+          <div class="sl-stat-chip sl-stat-chip--emerald">
+            <span class="material-icons-round">receipt_long</span>
+            <span class="sl-stat-chip__value" id="stat-bills">0</span> Bills
+          </div>
+          <div class="sl-stat-chip sl-stat-chip--rose">
+            <span class="material-icons-round">account_balance</span>
+            <span class="sl-stat-chip__value" id="stat-due">₹0</span> Due
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div class="sl-loading" id="loading-state">
+        <div class="sl-spinner"></div>
+        <p>Loading supplier ledgers...</p>
+      </div>
+
+      <!-- Empty state -->
+      <div class="sl-empty" id="empty-state" style="display: none;">
+        <span class="material-icons-round sl-empty__icon">menu_book</span>
+        <p class="sl-empty__title">No Suppliers Found</p>
+        <p class="sl-empty__sub">Purchase bills from "Bill Update" will appear here as supplier ledgers</p>
+      </div>
+
+      <!-- Supplier List -->
+      <div class="sl-grid" id="suppliers-grid" style="display: none;"></div>
+    </main>
+  </div>
+
+  <!-- Supplier Detail Modal -->
+  <div class="sl-overlay" id="detail-overlay">
+    <div class="sl-detail-panel">
+      <div class="sl-detail-panel__header">
+        <button class="sl-detail-panel__back" id="detail-back">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="sl-detail-panel__title-group">
+          <h3 id="detail-supplier-name">Supplier Name</h3>
+          <p id="detail-supplier-contact"></p>
+        </div>
+        <button class="sl-detail-panel__close" id="detail-close">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="sl-detail-summary" id="detail-summary"></div>
+
+      <!-- Transactions Table -->
+      <div class="sl-detail-body" id="detail-body">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Log Detail Modal (Matches Bill History style) -->
+  <div class="changelog-overlay" id="log-overlay">
+    <div class="changelog-panel">
+      <div class="changelog-panel__header">
+        <h3>
+          <span class="material-icons-round">history</span>
+          Invoice Edit History
+        </h3>
+        <span id="log-invoice-num" style="color: var(--accent-orange); font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 0.9rem;"></span>
+        <button class="modal__close" id="log-close" style="width: 36px; height: 36px; border-radius: 50%;">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      <div class="changelog-panel__body" id="log-body"></div>
+    </div>
+  </div>
+
+  <script src="../scripts/supplier_ledger.js"></script>
+</body>
+
+</html>

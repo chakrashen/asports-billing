@@ -10,6 +10,56 @@
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   <!-- PDF.js for PDF to Image conversion -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    /* Toggle Switch Styles */
+    .switch-container {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 18px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.1);
+      transition: .3s;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 12px;
+      width: 12px;
+      left: 3px;
+      bottom: 2px;
+      background-color: var(--text-muted);
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: var(--accent-emerald-dim);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    input:checked + .slider:before {
+      transform: translateX(16px);
+      background-color: var(--accent-emerald);
+    }
+  </style>
 </head>
 <body>
   <div class="bg-grid"></div>
@@ -110,19 +160,32 @@
           </div>
         </div>
 
-        <!-- Row 2: Supplier Address (full width) -->
-        <div class="customer-form" style="display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 100%; margin-top: 16px;">
+        <!-- Row 2: Supplier Address & Remark -->
+        <div class="customer-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 100%; margin-top: 16px;">
           <div class="form-group">
             <label for="supplier-address" class="form-label">Supplier Address</label>
             <textarea id="supplier-address" class="form-input form-input--textarea" placeholder="Enter supplier address" rows="2" style="resize: none; min-height: 60px;"></textarea>
+          </div>
+          <div class="form-group">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+              <label for="bill-remarks" class="form-label" style="margin-bottom: 0;">Remark</label>
+              <label class="switch-container" title="Show remark in PDF">
+                <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-muted); margin-right: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Show in PDF</span>
+                <div class="switch">
+                  <input type="checkbox" id="show-remarks-pdf" checked>
+                  <span class="slider"></span>
+                </div>
+              </label>
+            </div>
+            <textarea id="bill-remarks" class="form-input form-input--textarea" placeholder="Add any notes or remarks here" rows="2" style="resize: none; min-height: 60px;"></textarea>
           </div>
         </div>
 
         <!-- Row 3: Phone, Email -->
         <div class="customer-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 100%; margin-top: 16px;">
           <div class="form-group">
-            <label for="supplier-phone" class="form-label">Contact Number</label>
-            <input type="tel" id="supplier-phone" class="form-input" placeholder="Enter 10-digit number" maxlength="10" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')" autocomplete="off">
+            <label for="supplier-phone" class="form-label">Contact Number <span style="color: var(--accent-rose);">*</span></label>
+            <input type="tel" id="supplier-phone" class="form-input" placeholder="Enter 10-digit number" maxlength="25" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')" autocomplete="off">
           </div>
           <div class="form-group">
             <label for="supplier-email" class="form-label">Email</label>
@@ -190,10 +253,14 @@
             <h2 class="section__title">Billing Summary</h2>
           </div>
         </div>
-        <div class="customer-form" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; max-width: 100%;">
+        <div class="customer-form" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; max-width: 100%;">
           <div class="form-group">
             <label for="total-amount" class="form-label">Total Amount (₹) <span style="color: var(--accent-rose);">*</span></label>
-            <input type="number" id="total-amount" class="form-input" placeholder="0.00" step="0.01" autocomplete="off" style="font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.1rem; color: var(--accent-emerald);">
+            <input type="number" id="total-amount" class="form-input" placeholder="0.00" step="0.01" autocomplete="off" readonly style="font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.1rem; color: var(--accent-emerald); cursor: not-allowed; background: rgba(255,255,255,0.02);">
+          </div>
+          <div class="form-group">
+            <label for="discount-amount" class="form-label">Discount (₹)</label>
+            <input type="number" id="discount-amount" class="form-input" placeholder="0.00" step="0.01" value="0" autocomplete="off" style="font-family: 'Outfit', sans-serif; font-weight: 600; color: var(--accent-orange);">
           </div>
           <div class="form-group">
             <label for="paid-amount" class="form-label">Paid Amount (₹)</label>

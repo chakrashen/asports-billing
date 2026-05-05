@@ -31,20 +31,25 @@ updateClock();
 setInterval(updateClock, 1000);
 
 // ─── Navigation ─────────────────────────────────────────────
-document.getElementById('btn-invoice').addEventListener('click', () => {
-  window.location.href = 'invoice.html';
-});
+const navMap = {
+  'btn-invoice': 'invoice.html',
+  'btn-order': 'order.html',
+  'btn-update': 'bill.html',
+  'btn-history': 'dashboard.html',
+  'btn-ledger': 'ledger.html',
+  'btn-stock': 'supplier_ledger.html'
+};
 
-document.getElementById('btn-order').addEventListener('click', () => {
-  window.location.href = 'order.html';
-});
-
-document.getElementById('btn-update').addEventListener('click', () => {
-  window.location.href = 'bill.html';
-});
-
-document.getElementById('btn-history').addEventListener('click', () => {
-  window.location.href = 'dashboard.html';
+Object.entries(navMap).forEach(([id, url]) => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('click', () => {
+      console.log(`Navigating to ${url}...`);
+      window.location.href = url;
+    });
+  } else {
+    console.warn(`Element with ID ${id} not found.`);
+  }
 });
 
 // Keyboard support

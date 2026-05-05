@@ -3,6 +3,8 @@
    ════════════════════════════════════════════════════════════ */
 
 let rowId = 0;
+let productSuggestionsList = [];
+let suggestionDebounceTimer = null;
 
 // ─── Clock ──────────────────────────────────────────────────
 function updateClock() {
@@ -68,13 +70,19 @@ function addRow(product = '', qty = '', price = '') {
   tr.innerHTML = `
     <td class="row-num">${1}</td>
     <td>
-      <input type="text" class="table-input input-product" placeholder="Product name" value="${escapeHtml(product)}" autocomplete="off" spellcheck="false">
+      <div class="input-wrapper">
+        <input type="text" class="table-input input-product" placeholder="Product name" value="${escapeHtml(product)}" autocomplete="off" spellcheck="false">
+        <div class="product-suggestions"></div>
+      </div>
     </td>
     <td>
       <input type="number" class="table-input table-input--num input-qty" placeholder="0" min="1" value="${qty}">
     </td>
     <td>
       <input type="number" class="table-input table-input--num input-price" placeholder="0.00" min="0" step="0.01" value="${price}">
+    </td>
+    <td>
+      <input type="number" class="table-input table-input--num input-gst" placeholder="0" min="0" max="100" step="0.01" value="0">
     </td>
     <td class="row-total">₹ 0.00</td>
     <td>
@@ -92,16 +100,52 @@ function addRow(product = '', qty = '', price = '') {
   }
 
   // Attach event listeners
+  const productInput = tr.querySelector('.input-product');
   const qtyInput = tr.querySelector('.input-qty');
   const priceInput = tr.querySelector('.input-price');
+  const gstInput = tr.querySelector('.input-gst');
   const deleteBtn = tr.querySelector('.btn-delete-row');
+  const suggestionsDiv = tr.querySelector('.product-suggestions');
 
   qtyInput.addEventListener('input', () => updateRowTotal(tr));
   priceInput.addEventListener('input', () => updateRowTotal(tr));
+  gstInput.addEventListener('input', () => updateRowTotal(tr));
   deleteBtn.addEventListener('click', () => removeRow(tr));
 
+  // Product Suggestion Logic
+  productInput.addEventListener('input', (e) => {
+    const query = e.target.value.trim();
+    if (query.length < 2) {
+      suggestionsDiv.style.display = 'none';
+      return;
+    }
+
+    clearTimeout(suggestionDebounceTimer);
+    suggestionDebounceTimer = setTimeout(async () => {
+      const result = await window.api.searchShopifyProducts(query, 'title');
+      if (result.success && result.products.length > 0) {
+        renderSuggestions(result.products, suggestionsDiv, productInput, priceInput, tr);
+      } else {
+        suggestionsDiv.style.display = 'none';
+      }
+    }, 300);
+  });
+
+  productInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      suggestionsDiv.style.display = 'none';
+    }
+  });
+
+  // Hide suggestions when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!tr.contains(e.target)) {
+      suggestionsDiv.style.display = 'none';
+    }
+  });
+
   // Focus on product input
-  tr.querySelector('.input-product').focus();
+  productInput.focus();
 
   updateRowTotal(tr);
   updateGrandTotal();
@@ -133,11 +177,47 @@ function getRowCount() {
   return document.querySelectorAll('#invoice-body tr').length;
 }
 
+function renderSuggestions(products, container, input, priceInput, tr) {
+  container.innerHTML = '';
+  container.style.display = 'block';
+
+  // Take top 8 matches
+  products.slice(0, 8).forEach(product => {
+    const item = document.createElement('div');
+    item.className = 'suggestion-item';
+
+    // Get default price from first variant
+    const defaultPrice = product.variants && product.variants.length > 0
+      ? product.variants[0].price
+      : '0.00';
+
+    const stock = (product.variants || []).reduce((s, v) => s + (v.inventory_quantity || 0), 0);
+
+    item.innerHTML = `
+      <span class="suggestion-item__title">${escapeHtml(product.title)}</span>
+      <div class="suggestion-item__meta">
+        <span>Stock: ${stock}</span>
+        <span class="suggestion-item__price">₹ ${parseFloat(defaultPrice).toLocaleString('en-IN')}</span>
+      </div>
+    `;
+
+    item.addEventListener('click', () => {
+      input.value = product.title;
+      priceInput.value = defaultPrice;
+      container.style.display = 'none';
+      updateRowTotal(tr);
+    });
+
+    container.appendChild(item);
+  });
+}
+
 // ─── Calculations ───────────────────────────────────────────
 function updateRowTotal(tr) {
   const qty = parseFloat(tr.querySelector('.input-qty').value) || 0;
   const price = parseFloat(tr.querySelector('.input-price').value) || 0;
-  const total = qty * price;
+  const gst = parseFloat(tr.querySelector('.input-gst').value) || 0;
+  const total = (qty * price) * (1 + gst / 100);
 
   tr.querySelector('.row-total').textContent = '₹ ' + total.toLocaleString('en-IN', {
     minimumFractionDigits: 2,
@@ -154,18 +234,22 @@ function updateGrandTotal() {
   rows.forEach(row => {
     const qty = parseFloat(row.querySelector('.input-qty').value) || 0;
     const price = parseFloat(row.querySelector('.input-price').value) || 0;
-    grandTotal += qty * price;
+    const gst = parseFloat(row.querySelector('.input-gst').value) || 0;
+    grandTotal += (qty * price) * (1 + gst / 100);
   });
 
+  const discountAmount = parseFloat(document.getElementById('discount-amount').value) || 0;
   const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
-  const balanceDue = grandTotal - paidAmount;
+
+  const netTotal = Math.max(0, grandTotal - discountAmount);
+  const dueAmount = netTotal - paidAmount;
 
   document.getElementById('grand-total').textContent = '₹ ' + grandTotal.toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
 
-  document.getElementById('due-total').textContent = '₹ ' + balanceDue.toLocaleString('en-IN', {
+  document.getElementById('due-total').textContent = '₹ ' + dueAmount.toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
@@ -173,6 +257,49 @@ function updateGrandTotal() {
 
 // Add event listener for real-time payment calculation
 document.getElementById('paid-amount').addEventListener('input', updateGrandTotal);
+document.getElementById('discount-amount').addEventListener('input', updateGrandTotal);
+
+// ─── Fill Remaining Balance Logic ──────────────────────────
+const btnShowDue = document.getElementById('btn-show-due');
+const dueBadge = document.getElementById('due-badge');
+const paidInput = document.getElementById('paid-amount');
+const dueTotalDisplay = document.getElementById('due-total');
+
+btnShowDue.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isVisible = dueBadge.classList.contains('show');
+  
+  if (!isVisible) {
+    // Get current due amount from the display text (remove ₹ and comma)
+    const currentDueText = dueTotalDisplay.textContent.replace('₹ ', '').replace(/,/g, '');
+    const currentDue = parseFloat(currentDueText) || 0;
+    
+    if (currentDue <= 0) {
+      showToast('No remaining balance to fill', 'error');
+      return;
+    }
+    
+    dueBadge.textContent = currentDue.toFixed(2);
+    dueBadge.classList.add('show');
+  } else {
+    dueBadge.classList.remove('show');
+  }
+});
+
+dueBadge.addEventListener('click', () => {
+  const amount = parseFloat(dueBadge.textContent) || 0;
+  paidInput.value = amount.toFixed(2);
+  dueBadge.classList.remove('show');
+  updateGrandTotal();
+  showToast(`Received amount set to ₹ ${amount.toLocaleString('en-IN')}`, 'success');
+});
+
+// Hide badge when clicking anywhere else
+document.addEventListener('click', (e) => {
+  if (!dueBadge.contains(e.target) && e.target !== btnShowDue) {
+    dueBadge.classList.remove('show');
+  }
+});
 
 function updateItemCount() {
   document.getElementById('item-count').textContent = getRowCount();
@@ -190,6 +317,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   document.getElementById('customer-email').value = '';
   document.getElementById('customer-address').value = '';
   document.getElementById('paid-amount').value = '';
+  document.getElementById('discount-amount').value = '';
   document.getElementById('invoice-body').innerHTML = '';
   rowId = 0;
   updateGrandTotal();
@@ -208,14 +336,15 @@ btnGenerate.addEventListener('click', async () => {
   const email = document.getElementById('customer-email').value.trim();
   const address = document.getElementById('customer-address').value.trim();
 
-  if (!customerName) {
-    showToast('Please enter customer name', 'error');
-    document.getElementById('customer-name').focus();
+  if (!customerName || !phone) {
+    showToast('Please enter customer name and phone number', 'error');
+    if (!customerName) document.getElementById('customer-name').focus();
+    else document.getElementById('customer-phone').focus();
     return;
   }
 
-  if (phone && phone.length !== 10) {
-    showToast('Phone number must be exactly 10 digits', 'error');
+  if (phone.length > 25) {
+    showToast('Phone number cannot exceed 25 digits', 'error');
     document.getElementById('customer-phone').focus();
     return;
   }
@@ -233,6 +362,7 @@ btnGenerate.addEventListener('click', async () => {
     const product = row.querySelector('.input-product').value.trim();
     const qty = parseInt(row.querySelector('.input-qty').value) || 0;
     const price = parseFloat(row.querySelector('.input-price').value) || 0;
+    const gstPercent = parseFloat(row.querySelector('.input-gst').value) || 0;
 
     if (!product) {
       hasError = true;
@@ -258,7 +388,7 @@ btnGenerate.addEventListener('click', async () => {
       }, 2000);
     }
 
-    items.push({ product, qty, price });
+    items.push({ product, qty, price, gstPercent });
   });
 
   if (hasError) {
@@ -269,59 +399,69 @@ btnGenerate.addEventListener('click', async () => {
   const nextInvRes = await window.api.getNextInvoiceNumber();
   const nextInvoiceNumber = (nextInvRes && nextInvRes.success) ? nextInvRes.invoiceNumber : 'NEW';
 
+  const discountAmount = parseFloat(document.getElementById('discount-amount').value) || 0;
   const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
-  const totalAmount = items.reduce((sum, item) => sum + (item.qty * item.price), 0);
+  const subTotal = items.reduce((sum, item) => sum + (item.qty * item.price * (1 + item.gstPercent / 100)), 0);
+  const totalAmount = Math.max(0, subTotal - discountAmount);
   const dueAmount = totalAmount - paidAmount;
 
-  currentInvoiceData = { 
-    customerName, 
-    phone, 
-    email, 
-    address, 
-    items, 
+  currentInvoiceData = {
+    customerName,
+    phone,
+    email,
+    address,
+    items,
     invoiceNumber: nextInvoiceNumber,
     paidAmount,
-    dueAmount
+    dueAmount,
+    discountAmount
   };
   showInvoiceModal(currentInvoiceData);
 });
 
 function numberToWords(num) {
-    if (num === 0) return 'Zero Rupees Only';
-    const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
-    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-    if ((num = num.toString()).length > 9) return 'overflow';
-    const n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-    if (!n) return '';
-    let str = '';
-    str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
-    str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
-    str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
-    str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
-    str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) + 'Rupees Only' : 'Rupees Only';
-    return str.trim();
+  if (num === 0) return 'Zero Rupees Only';
+  const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  if ((num = num.toString()).length > 9) return 'overflow';
+  const n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+  if (!n) return '';
+  let str = '';
+  str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
+  str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
+  str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
+  str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
+  str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) + 'Rupees Only' : 'Rupees Only';
+  return str.trim();
 }
 
 // ─── Modal Logic ────────────────────────────────────────────
 function showInvoiceModal(data) {
-  const { paidAmount, dueAmount } = data;
-  let total = 0;
+  const { paidAmount, dueAmount, discountAmount = 0 } = data;
+  let totalBase = 0;
+  let totalTax = 0;
   let itemsHtml = '';
-  
-  // Need minimum height for rows to match image style
+
   data.items.forEach((item, index) => {
-    const itemTotal = item.qty * item.price;
-    total += itemTotal;
+    const itemBaseTotal = item.qty * item.price;
+    const itemGstAmount = itemBaseTotal * (item.gstPercent / 100);
+    totalBase += itemBaseTotal;
+    totalTax += itemGstAmount;
     itemsHtml += `
       <tr>
         <td style="padding: 6px; border-right: 1px solid #000; border-bottom: 0;">${escapeHtml(item.product)}</td>
         <td style="padding: 6px; border-right: 1px solid #000; border-bottom: 0; text-align: center;">-</td>
         <td style="padding: 6px; border-right: 1px solid #000; border-bottom: 0; text-align: center;">${item.qty}</td>
         <td style="padding: 6px; border-right: 1px solid #000; border-bottom: 0; text-align: right;">${item.price.toFixed(2)}</td>
-        <td style="padding: 6px; border-bottom: 0; text-align: right;">${itemTotal.toFixed(2)}</td>
+        <td style="padding: 6px; border-right: 1px solid #000; border-bottom: 0; text-align: right;">${item.gstPercent}%</td>
+        <td style="padding: 6px; border-bottom: 0; text-align: right;">${itemBaseTotal.toFixed(2)}</td>
       </tr>
     `;
   });
+
+  const grandTotalVal = totalBase + totalTax;
+  const netTotalVal = grandTotalVal - discountAmount;
+  const finalDueVal = netTotalVal - paidAmount;
 
   const previewHtml = `
     <div style="background:#fff; color:#000; font-family:Arial, sans-serif; border:1px solid #000; width:100%; margin:0 auto; font-size:12px; line-height:1.4;">
@@ -355,10 +495,11 @@ function showInvoiceModal(data) {
           ${data.phone ? 'Phone: ' + escapeHtml(data.phone) : ''}
         </div>
         <div style="flex:1; padding:8px; background:#e6f2ff;">
-          Payment Due Date:<br>
-          Payment Mode:<br>
-          <div style="margin-top:5px; padding:2px 5px; ${dueAmount > 0 ? 'background:#ffff00; font-weight:bold;' : ''}">
-            Due Amount: ₹ ${dueAmount.toFixed(2)}
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Total Grand Amount:</span><span>${grandTotalVal.toFixed(2)}</span></div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Discount:</span><span>${discountAmount.toFixed(2)}</span></div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Amount Paid:</span><span>${paidAmount.toFixed(2)}</span></div>
+          <div style="margin-top:5px; padding:2px 5px; ${finalDueVal > 0 ? 'background:#ffff00; font-weight:bold;' : ''}">
+            <div style="display:flex; justify-content:space-between;"><span>Due Amount:</span><span>${finalDueVal.toFixed(2)}</span></div>
           </div>
         </div>
       </div>
@@ -371,49 +512,50 @@ function showInvoiceModal(data) {
             <th style="padding:6px; border-right:1px solid #000; font-weight:bold; text-align:center;">HSN Code</th>
             <th style="padding:6px; border-right:1px solid #000; font-weight:bold; text-align:center;">Qty</th>
             <th style="padding:6px; border-right:1px solid #000; font-weight:bold; text-align:right;">Rate</th>
+            <th style="padding:6px; border-right:1px solid #000; font-weight:bold; text-align:right;">GST</th>
             <th style="padding:6px; font-weight:bold; text-align:right;">Amount</th>
           </tr>
         </thead>
         <tbody style="min-height: 200px;">
           ${itemsHtml}
           <tr>
-            <!-- Placeholder row to give table height before totals -->
+            <td style="padding: 40px 6px; border-right: 1px solid #000;"></td>
             <td style="padding: 40px 6px; border-right: 1px solid #000;"></td>
             <td style="padding: 40px 6px; border-right: 1px solid #000;"></td>
             <td style="padding: 40px 6px; border-right: 1px solid #000;"></td>
             <td style="padding: 40px 6px; border-right: 1px solid #000;"></td>
             <td style="padding: 40px 6px;"></td>
           </tr>
-          <tr>
-            <td style="padding:6px; border-right:1px solid #000; border-top:1px solid #000;"></td>
-            <td style="padding:6px; border-right:1px solid #000; border-top:1px solid #000;"></td>
-            <td style="padding:6px; border-right:1px solid #000; border-top:1px solid #000;"></td>
-            <td style="padding:6px; border-right:1px solid #000; border-top:1px solid #000; font-weight:bold; text-align:right;">Total</td>
-            <td style="padding:6px; border-top:1px solid #000; font-weight:bold; text-align:right;">${total.toFixed(2)}</td>
+          <tr style="border-top: 2px solid #000; font-weight: bold;">
+            <td style="padding: 6px; border-right: 1px solid #000;">Total</td>
+            <td style="padding: 6px; border-right: 1px solid #000; text-align: center;">-</td>
+            <td style="padding: 6px; border-right: 1px solid #000; text-align: center;">${data.items.reduce((sum, it) => sum + it.qty, 0)}</td>
+            <td style="padding: 6px; border-right: 1px solid #000;"></td>
+            <td style="padding: 6px; border-right: 1px solid #000;"></td>
+            <td style="padding: 6px; text-align: right;">${totalBase.toFixed(2)}</td>
           </tr>
         </tbody>
       </table>
       
       <!-- Footer Sections -->
       <div style="display:flex; border-top:1px solid #000; border-bottom:1px solid #000;">
-        <!-- Terms -->
         <div style="flex:1.2; padding:8px; border-right:1px solid #000; font-size:11px;">
           <strong style="font-size:12px;">Terms & conditions</strong><br>
           Orders once confirmed cannot be canceled.<br>
           No refunds will be processed under any circumstances.<br>
-          The provider is not liable for any indirect or consequential losses from the use of services/products.
+          The provider is not liable for any indirect or consequential losses from the use of services/products.<br>
+          Subject to 'jodhpur' Jurisdiction only.
         </div>
-        <!-- Taxes -->
         <div style="flex:1; padding:0; display:flex; flex-direction:column; justify-content:space-between;">
           <div style="padding:8px; padding-bottom:0;">
-             <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><strong>Add : CGST @ 0%</strong><span>-</span></div>
-             <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><strong>Add : SGST @ 0%</strong><span>-</span></div>
-             <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><strong>Balance Received :</strong><span>${(paidAmount || 0).toFixed(2)}</span></div>
-             <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><strong>Balance Due :</strong><span>${(dueAmount || 0).toFixed(2)}</span></div>
+             <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><strong>CGST :</strong><span>${(totalTax / 2).toFixed(2)}</span></div>
+             <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><strong>SGST :</strong><span>${(totalTax / 2).toFixed(2)}</span></div>
+             <div style="border-top: 1px solid #000; margin: 4px 0 4px auto; width: 40%;"></div>
+             <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><strong>Total Tax :</strong><span>${totalTax.toFixed(2)}</span></div>
           </div>
           <div style="background:#2f5597; color:#fff; display:flex; justify-content:space-between; padding:8px; font-weight:bold; border-top:1px solid #000;">
             <span>Grand Total</span>
-            <span>${total.toFixed(2)}</span>
+            <span>${netTotalVal.toFixed(2)}</span>
           </div>
         </div>
       </div>
@@ -421,7 +563,7 @@ function showInvoiceModal(data) {
       <!-- Amount in Words -->
       <div style="padding:8px; border-bottom:1px solid #000; display:flex; gap: 15px;">
         <strong>Total Amount (₹ - In Words) :</strong>
-        <span>${numberToWords(Math.round(total))}</span>
+        <span>${numberToWords(Math.round(netTotalVal))}</span>
       </div>
       
       <!-- Signatory -->
@@ -461,7 +603,7 @@ document.getElementById('modal-save').addEventListener('click', async () => {
 
   try {
     const result = await window.api.saveInvoice(currentInvoiceData);
-    
+
     if (result && result.success) {
       showToast(`Invoice #${result.invoiceId} saved successfully!`, 'success');
       btn.innerHTML = '<span class="material-icons-round">check</span>';
@@ -503,7 +645,7 @@ document.getElementById('modal-download').addEventListener('click', async () => 
   try {
     // Step 1: Save invoice to database
     const result = await window.api.saveInvoice(currentInvoiceData);
-    
+
     if (!result || !result.success) {
       showToast('Error: ' + (result?.error || 'Database error'), 'error');
       resetDownloadBtn(btn);
@@ -515,7 +657,7 @@ document.getElementById('modal-download').addEventListener('click', async () => 
       ...currentInvoiceData,
       invoiceNumber: result.invoiceNumber
     });
-    
+
     if (pdfResult && pdfResult.success) {
       showToast(`Invoice #${result.invoiceId} saved & PDF downloaded!`, 'success');
       btn.innerHTML = '<span class="material-icons-round">check</span>';
@@ -594,10 +736,10 @@ function renderPrinterList(printers, previewHtml) {
     const isDefault = printer.isDefault;
     const item = document.createElement('div');
     item.className = `printer-item ${isDefault ? 'printer-item--default' : ''}`;
-    
+
     // Determine status color/symbol (Simplified logic for Electron printers)
     const statusText = isDefault ? 'Default Printer' : 'Ready';
-    
+
     item.innerHTML = `
       <div class="printer-item__icon">
         <span class="material-icons-round">print</span>
@@ -623,9 +765,9 @@ async function executeSilentPrint(printerName, html) {
   showToast(`Printing to ${printerName}...`, 'success');
 
   try {
-    const result = await window.api.printInvoice({ 
-      htmlContent: html, 
-      deviceName: printerName 
+    const result = await window.api.printInvoice({
+      htmlContent: html,
+      deviceName: printerName
     });
 
     if (result && result.success) {

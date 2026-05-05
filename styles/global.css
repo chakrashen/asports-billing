@@ -28,6 +28,8 @@
   --accent-orange-dim: rgba(251, 146, 60, 0.15);
   --accent-rose: #f43f5e;
   --accent-rose-dim: rgba(244, 63, 94, 0.15);
+  --accent-amber: #fcd34d;
+  --accent-amber-dim: rgba(252, 211, 77, 0.15);
 
   /* Text */
   --text-primary: #f0f1f7;

@@ -1,78 +1,415 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Order History — ASPORTS ZONE</title>
   <link rel="stylesheet" href="../styles/global.css">
   <link rel="stylesheet" href="../styles/history.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   <style>
-    /* Specific overrides if needed */
-    .history-card--order {
-      border-left: 4px solid var(--accent-orange);
+    .btn-view-detail {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      background: rgba(0, 229, 255, 0.08);
+      color: #00e5ff;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
     }
-    .history-card__type--order {
-      background: var(--accent-orange-dim);
-      color: var(--accent-orange);
+
+    .btn-view-detail:hover {
+      background: rgba(0, 229, 255, 0.15);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(0, 229, 255, 0.15);
+    }
+
+    /* ─── PDF Modal ─── */
+    .pdf-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(10px);
+      z-index: 1000;
+      display: none;
+      flex-direction: column;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .pdf-modal-overlay.show {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .pdf-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: rgba(10, 10, 26, 0.95);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .pdf-modal-header h3 {
+      color: var(--text-primary);
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pdf-modal-header h3 .material-icons-round {
+      color: var(--accent-cyan);
+      font-size: 22px;
+    }
+
+    .pdf-modal-body {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .pdf-modal-body embed,
+    .pdf-modal-body iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 8px;
+    }
+
+    .pdf-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      color: var(--text-muted);
+    }
+
+    .pdf-loading .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: var(--accent-cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .pdf-modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: rgba(10, 10, 26, 0.95);
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .pdf-modal-footer-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+    }
+
+    .btn-pdf-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .btn-pdf-download:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn-pdf-action--edit {
+      border-color: rgba(0, 229, 255, 0.25);
+      background: rgba(0, 229, 255, 0.08);
+      color: #00e5ff;
+    }
+
+    .btn-pdf-action--edit:hover {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: rgba(0, 229, 255, 0.4);
+    }
+
+    .btn-pdf-action--delete {
+      border-color: rgba(244, 63, 94, 0.25);
+      background: rgba(244, 63, 94, 0.08);
+      color: var(--accent-rose);
+    }
+
+    .btn-pdf-action--delete:hover {
+      background: rgba(244, 63, 94, 0.15);
+      border-color: rgba(244, 63, 94, 0.4);
+    }
+
+    .btn-pdf-close {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .btn-pdf-close:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    .btn-pdf-back {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      margin-right: 12px;
+      border-radius: 50%;
+      transition: all 0.2s ease;
+    }
+
+    .btn-pdf-back:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+    }
+
+    /* ─── Fixed Header & Scrollable List ─── */
+    html, body { height: 100vh; overflow: hidden; }
+    .app-container {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .header { flex-shrink: 0; background: var(--bg-primary); z-index: 10; }
+    .history-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-top: 10px;
+      gap: 20px;
+    }
+    .history-section { flex: 1; overflow-y: auto; padding-right: 8px !important; margin-bottom: 20px; }
+    .history-section::-webkit-scrollbar { width: 6px; }
+    .history-section::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+    .history-table thead th { position: sticky; top: 0; z-index: 5; background: #0d0d21; box-shadow: 0 1px 0 var(--border-subtle); }
+
+    /* Edit Modal Overlay */
+    .edit-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .edit-modal-overlay.show { display: flex; }
+    .edit-modal {
+      width: 600px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-medium);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: var(--shadow-lg);
     }
   </style>
 </head>
+
 <body>
   <div class="bg-grid"></div>
   <div class="bg-glow bg-glow--1"></div>
   <div class="bg-glow bg-glow--2"></div>
 
   <div class="app-container">
-    <!-- Header -->
     <header class="header" id="app-header">
       <div class="header__left">
-        <button class="btn-back" id="btn-back" title="Back" style="border-radius: 50%; background: rgba(255,255,255,0.05); width: 42px; height: 42px;">
+        <button class="btn-back" id="btn-back" title="Back">
           <span class="material-icons-round">arrow_back</span>
         </button>
-        <div class="header__brand" style="margin-left: 10px;">
-          <span class="header__icon material-icons-round" style="font-size: 32px; color: var(--accent-cyan);">history</span>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round" style="color: var(--accent-cyan);">history</span>
           <div>
-            <h1 class="header__title" style="font-size: 1.4rem; letter-spacing: 0.5px; background: none; -webkit-text-fill-color: var(--accent-cyan); color: var(--accent-cyan);">Order History</h1>
-            <p class="header__subtitle" style="font-size: 0.75rem; color: var(--text-muted); letter-spacing: 1px;">PURCHASE ORDERS</p>
+            <h1 class="header__title">Order History</h1>
+            <p class="header__subtitle">Purchase Orders</p>
           </div>
         </div>
       </div>
       <div class="header__meta">
-        <span class="header__date" id="header-date" style="color: var(--text-secondary); opacity: 0.8;"></span>
-        <span class="header__time" id="header-time" style="color: var(--accent-cyan); font-weight: 600;"></span>
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
       </div>
     </header>
 
-    <!-- Main Content -->
     <main class="history-main">
-      <!-- Summary Chips -->
-      <div class="summary-row">
-        <div class="summary-chip" id="stat-total-orders-chip">
-          <span class="material-icons-round">receipt_long</span>
-          <span id="stat-total-orders">0</span> total orders
+      <div class="filter-row"
+        style="display: flex; justify-content: space-between; align-items: center; gap: 20px; background: rgba(255,255,255,0.03); padding: 16px 20px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+        <div style="display: flex; gap: 24px;">
+           <div class="summary-chip" id="stat-total-orders-chip" style="background: rgba(0, 229, 255, 0.08); border-color: rgba(0, 229, 255, 0.2); color: var(--accent-cyan);">
+              <span class="material-icons-round" style="font-size: 18px; color: var(--accent-cyan);">receipt_long</span>
+              <span id="stat-total-orders" style="font-weight: 800; color: #fff; margin: 0 4px;">0</span> Total Orders
+           </div>
         </div>
-        <div class="search-box">
+        <div class="search-box" style="margin: 0; flex: 0 0 350px;">
           <span class="material-icons-round search-box__icon">search</span>
-          <input type="text" id="search-input" class="search-box__input" placeholder="Search by supplier or order ID..." autocomplete="off">
+          <input type="text" id="search-input" class="search-box__input" placeholder="Search supplier or order ID..."
+            autocomplete="off">
         </div>
       </div>
 
-      <!-- Content -->
-      <section class="section history-section" style="background: transparent; border: none; padding: 0; box-shadow: none;">
-        <div id="orders-list">
-          <!-- Order cards injected by JS -->
-        </div>
-
-        <!-- Empty State -->
-        <div class="empty-state" id="empty-state" style="display:none; text-align: center; padding: 60px 0;">
-          <span class="material-icons-round" style="font-size: 64px; color: var(--text-muted); opacity: 0.2; display: block; margin-bottom: 20px;">history_toggle_off</span>
-          <p class="empty-state__text" style="font-size: 1.2rem; font-weight: 600; color: var(--text-secondary);">No orders found</p>
-          <p class="empty-state__sub" style="color: var(--text-muted);">Created orders will appear here</p>
+      <section class="section history-section" style="padding: 0; background: transparent; border: none; box-shadow: none;">
+        <div id="table-view">
+          <div class="table-container" style="background: rgba(10, 10, 26, 0.4); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid var(--border-subtle); overflow: visible;">
+            <table class="history-table" id="orders-table" style="border-collapse: separate; border-spacing: 0; width: 100%;">
+              <thead>
+                <tr style="background: rgba(255,255,255,0.03);">
+                  <th style="padding: 18px 12px 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); width: 140px; white-space: nowrap;">Order No.</th>
+                  <th style="padding: 18px 12px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; text-align: left;">
+                    <span style="position: relative; left: -20px;">Supplier Name</span></th>
+                  <th style="padding: 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: right; width: 160px; white-space: nowrap;">Item Count</th>
+                  <th style="padding: 18px 12px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: right; width: 140px; white-space: nowrap;">Action</th>
+                  <th style="padding: 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: center; width: 80px; white-space: nowrap;">Delete</th>
+                </tr>
+              </thead>
+              <tbody id="orders-body"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="empty-state" style="display:none; padding: 100px 0;">
+            <span class="material-icons-round empty-state__icon" style="font-size: 64px; color: var(--border-subtle);">history_toggle_off</span>
+            <p class="empty-state__text" style="font-size: 1.2rem; font-weight: 600; color: var(--text-muted);">No orders found</p>
+            <p class="empty-state__sub">Created orders will appear here</p>
+          </div>
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- PDF Viewer Modal -->
+  <div class="pdf-modal-overlay" id="pdf-modal">
+    <div class="pdf-modal-header">
+      <div style="display: flex; align-items: center;">
+        <button class="btn-pdf-back" id="btn-pdf-back" title="Back to list">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <h3>
+          <span class="material-icons-round">picture_as_pdf</span>
+          <span id="pdf-modal-title">Purchase Order</span>
+        </h3>
+      </div>
+    </div>
+    <div class="pdf-modal-body" id="pdf-modal-body">
+      <div class="pdf-loading" id="pdf-loading">
+        <div class="spinner"></div>
+        <span>Generating PDF preview...</span>
+      </div>
+    </div>
+    <div class="pdf-modal-footer">
+      <div class="pdf-modal-footer-right">
+        <button class="btn-pdf-download btn-pdf-action--edit" id="btn-pdf-edit">
+          <span class="material-icons-round">edit</span>
+          Edit
+        </button>
+        <button class="btn-pdf-download btn-pdf-action--delete" id="btn-pdf-delete">
+          <span class="material-icons-round">delete</span>
+          Delete
+        </button>
+        <button class="btn-pdf-download" id="btn-pdf-download">
+          <span class="material-icons-round">download</span>
+          Download
+        </button>
+        <button class="btn-pdf-close" id="btn-pdf-close">
+          <span class="material-icons-round">close</span>
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="edit-modal-overlay" id="edit-modal-overlay">
+    <div class="edit-modal">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">
+        <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin: 0;">Edit Order <span id="edit-modal-order-id"></span></h3>
+        <button class="btn-pdf-back" id="btn-edit-close" style="margin: 0; padding: 4px;"><span class="material-icons-round">close</span></button>
+      </div>
+      <div class="edit-form">
+        <div class="form-group">
+          <label class="form-label">Supplier Name</label>
+          <input type="text" id="edit-supplier" class="form-input" placeholder="Enter supplier name">
+        </div>
+        <div class="form-row" style="display: flex; gap: 16px; margin-bottom: 20px;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label">Phone</label>
+            <input type="text" id="edit-phone" class="form-input" placeholder="Phone" maxlength="10">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label">Email</label>
+            <input type="email" id="edit-email" class="form-input" placeholder="Email">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Address</label>
+          <textarea id="edit-address" class="form-input" rows="2" placeholder="Address"></textarea>
+        </div>
+        <div style="margin-top: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-secondary);">Order Items</h4>
+            <button class="btn-refresh" id="btn-add-edit-item" style="padding: 6px 12px; font-size: 0.75rem;">+ Add Item</button>
+          </div>
+          <div id="edit-items-container" style="max-height: 200px; overflow-y: auto;"></div>
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 32px; justify-content: flex-end;">
+          <button class="btn-refresh" id="btn-cancel-edit" style="min-width: 100px;">CANCEL</button>
+          <button class="btn-export" id="btn-save-edit" style="min-width: 120px;">SAVE CHANGES</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="toast" id="toast">
@@ -80,113 +417,7 @@
     <span class="toast__msg" id="toast-msg"></span>
   </div>
 
-  <!-- Detail Modal -->
-  <div class="modal-overlay" id="modal-overlay">
-    <div class="modal" id="order-modal">
-      <div class="modal__header">
-        <div class="modal__header-left">
-          <span class="material-icons-round modal__icon">receipt</span>
-          <h3 class="modal__title">Order Detail <span id="modal-order-id">#—</span></h3>
-        </div>
-        <div class="modal__header-actions">
-          <button class="btn-detail-action btn-detail-action--edit" id="btn-modal-edit" title="Edit Order">
-            <span class="material-icons-round">edit</span>
-            EDIT
-          </button>
-          <button class="btn-detail-action btn-detail-action--pdf" id="btn-modal-download" title="Download Order PDF">
-            <span class="material-icons-round">file_download</span>
-            DOWNLOAD
-          </button>
-          <button class="btn-detail-action btn-detail-action--purple" id="btn-modal-share" title="Share Order">
-            <span class="material-icons-round">share</span>
-            SHARE
-          </button>
-          <button class="modal__close" id="modal-close">
-            <span class="material-icons-round">close</span>
-          </button>
-        </div>
-      </div>
-
-      <div id="modal-view-section">
-        <div class="modal__info">
-          <div class="modal__info-row">
-            <span class="modal__info-label">Supplier</span>
-            <span class="modal__info-value" id="modal-supplier">—</span>
-          </div>
-          <div class="modal__info-row">
-            <span class="modal__info-label">Date</span>
-            <span class="modal__info-value" id="modal-date">—</span>
-          </div>
-          <div class="modal__info-row" id="modal-phone-row">
-            <span class="modal__info-label">Phone</span>
-            <span class="modal__info-value" id="modal-phone">—</span>
-          </div>
-          <div class="modal__info-row" id="modal-email-row">
-            <span class="modal__info-label">Email</span>
-            <span class="modal__info-value" id="modal-email">—</span>
-          </div>
-          <div class="modal__info-row" id="modal-address-row" style="grid-column: span 2;">
-            <span class="modal__info-label">Address</span>
-            <span class="modal__info-value" id="modal-address">—</span>
-          </div>
-        </div>
-
-        <div class="modal__table-wrap">
-          <table class="modal__table">
-            <thead>
-              <tr>
-                <th style="width: 40px;">#</th>
-                <th>Product</th>
-                <th style="text-align: right; width: 100px;">Quantity</th>
-              </tr>
-            </thead>
-            <tbody id="modal-items-body">
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Edit Section -->
-      <div id="modal-edit-section" style="display:none; padding: 24px;">
-        <div class="edit-form">
-          <div class="form-group">
-            <label class="form-label">Supplier Name</label>
-            <input type="text" id="edit-supplier" class="form-input" placeholder="Enter supplier name">
-          </div>
-          <div class="form-row" style="display: flex; gap: 16px; margin-bottom: 20px;">
-            <div class="form-group" style="flex: 1;">
-              <label class="form-label">Phone</label>
-              <input type="text" id="edit-phone" class="form-input" placeholder="Phone" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
-            </div>
-            <div class="form-group" style="flex: 1;">
-              <label class="form-label">Email</label>
-              <input type="email" id="edit-email" class="form-input" placeholder="Email">
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Address</label>
-            <textarea id="edit-address" class="form-input" rows="2" placeholder="Address"></textarea>
-          </div>
-          
-          <div style="margin-top: 24px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-secondary);">Order Items</h4>
-              <button class="btn-refresh" id="btn-add-edit-item" style="padding: 6px 12px; font-size: 0.75rem;">+ Add Item</button>
-            </div>
-            <div id="edit-items-container" style="max-height: 200px; overflow-y: auto;">
-              <!-- Items added here -->
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 12px; margin-top: 32px; justify-content: flex-end;">
-            <button class="btn-refresh" id="btn-cancel-edit" style="min-width: 100px;">CANCEL</button>
-            <button class="btn-export" id="btn-save-edit" style="min-width: 120px;">SAVE CHANGES</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <script src="../scripts/order_history.js"></script>
 </body>
+
 </html>

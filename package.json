@@ -8,7 +8,8 @@
     "dev": "electron .",
     "rebuild": "npx @electron/rebuild",
     "postinstall": "npx @electron/rebuild",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win",
+    "publish": "electron-builder --win --publish always"
   },
   "build": {
     "appId": "com.asports.billing",
@@ -39,7 +40,13 @@
         "to": "ffmpeg.dll"
       }
     ],
-    "asar": true
+    "asar": true,
+    "publish": {
+      "provider": "github",
+      "owner": "chakrashen",
+      "repo": "asports-billing",
+      "releaseType": "release"
+    }
   },
   "keywords": [],
   "author": "ASPORTS ZONE",
@@ -47,6 +54,9 @@
   "type": "commonjs",
   "dependencies": {
     "better-sqlite3": "^12.8.0",
+    "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.3",
+    "nodemailer": "^8.0.7",
     "pdfkit": "^0.18.0",
     "tesseract.js": "^7.0.0"
   },

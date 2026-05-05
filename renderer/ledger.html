@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shop Management — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/ledger.css">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+
+<body>
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <div class="app-container">
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">account_balance_wallet</span>
+          <div>
+            <h1 class="header__title">Shop Management</h1>
+            <p class="header__subtitle">Shopify Products</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <main class="ledger-main">
+      <!-- Search Row -->
+      <div class="ledger-search-row">
+        <div class="ledger-search-box">
+          <span class="material-icons-round ledger-search-box__icon">search</span>
+          <input type="text" id="search-input" class="ledger-search-box__input"
+            placeholder="Search products..." autocomplete="off">
+          <button class="btn-ledger-search" id="btn-search">
+            <span class="material-icons-round">search</span>
+            Search
+          </button>
+        </div>
+        <select id="search-filter" class="ledger-filter-select">
+          <option value="title">Title</option>
+          <option value="sku">SKU</option>
+          <option value="barcode">Barcode</option>
+          <option value="product_type">Product Type</option>
+          <option value="vendor">Vendor</option>
+          <option value="tag">Tag</option>
+        </select>
+      </div>
+
+      <!-- Stats Bar -->
+      <div class="ledger-stats" id="ledger-stats" style="display: none;">
+        <div class="ledger-stat-chip ledger-stat-chip--cyan">
+          <span class="material-icons-round">inventory_2</span>
+          <span class="ledger-stat-chip__value" id="stat-total">0</span> Products Found
+        </div>
+        <div class="ledger-stat-chip ledger-stat-chip--emerald">
+          <span class="material-icons-round">check_circle</span>
+          <span class="ledger-stat-chip__value" id="stat-in-stock">0</span> In Stock
+        </div>
+        <div class="ledger-stat-chip ledger-stat-chip--purple">
+          <span class="material-icons-round">sell</span>
+          <span class="ledger-stat-chip__value" id="stat-variants">0</span> Total Variants
+        </div>
+      </div>
+
+      <!-- Products Section (scrollable) -->
+      <section class="ledger-products-section" id="products-section">
+        <!-- Initial state -->
+        <div class="ledger-empty" id="initial-state">
+          <span class="material-icons-round ledger-empty__icon">manage_search</span>
+          <p class="ledger-empty__title">Search Your Shopify Products</p>
+          <p class="ledger-empty__sub">Enter a product name, SKU, barcode, or filter to get started</p>
+        </div>
+
+        <!-- Loading state -->
+        <div class="ledger-loading" id="loading-state" style="display: none;">
+          <div class="ledger-spinner"></div>
+          <p class="ledger-loading__text">Fetching products from Shopify...</p>
+        </div>
+
+        <!-- Error state -->
+        <div class="ledger-error" id="error-state" style="display: none;">
+          <span class="material-icons-round">error_outline</span>
+          <span id="error-message"></span>
+          <button class="btn-ledger-retry" id="btn-retry" style="margin-top: 12px; padding: 8px 24px; background: linear-gradient(135deg, #00e5ff, #00bcd4); color: #0a0e17; border: none; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+            <span class="material-icons-round" style="font-size: 18px;">refresh</span>
+            Retry
+          </button>
+        </div>
+
+        <!-- Empty results -->
+        <div class="ledger-empty" id="empty-state" style="display: none;">
+          <span class="material-icons-round ledger-empty__icon">search_off</span>
+          <p class="ledger-empty__title">No Products Found</p>
+          <p class="ledger-empty__sub">Try a different search term or filter</p>
+        </div>
+
+        <!-- Products grid -->
+        <div class="products-grid" id="products-grid" style="display: none;"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Product Detail Modal -->
+  <div class="detail-overlay" id="detail-overlay">
+    <div class="detail-panel">
+      <div class="detail-panel__header">
+        <h3>
+          <span class="material-icons-round">info</span>
+          <span id="detail-title">Product Details</span>
+        </h3>
+        <button class="detail-panel__close" id="detail-close">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      <div class="detail-panel__body" id="detail-body">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script src="../scripts/ledger.js"></script>
+</body>
+
+</html>

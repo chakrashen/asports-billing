@@ -1,4 +1,6 @@
+let allOrders = [];
 let currentOrder = null;
+let currentPdfPath = null;
 
 function updateClock() {
   const now = new Date();
@@ -20,13 +22,11 @@ async function loadOrders() {
     allOrders = result.orders;
     
     // Fetch items for all orders
-    let totalItems = 0;
     for (const order of allOrders) {
         const itemRes = await window.api.getOrderItems(order.id);
         if (itemRes.success) {
             order.items = itemRes.items;
             order.itemCount = itemRes.items.reduce((sum, item) => sum + item.qty, 0);
-            totalItems += order.itemCount;
         }
     }
     
@@ -39,142 +39,105 @@ async function loadOrders() {
 }
 
 function renderStats(count) {
-  document.getElementById('stat-total-orders').textContent = count;
+  const statEl = document.getElementById('stat-total-orders');
+  if (statEl) statEl.textContent = count;
 }
 
 function renderOrders(orders) {
-  const container = document.getElementById('orders-list');
+  const tbody = document.getElementById('orders-body');
   const emptyState = document.getElementById('empty-state');
   const query = document.getElementById('search-input').value.toLowerCase();
 
   const filtered = orders.filter(order => 
     order.supplier_name.toLowerCase().includes(query) || 
-    order.id.toString().includes(query)
+    order.id.toString().includes(query) ||
+    (order.order_number && order.order_number.toString().includes(query))
   );
 
   if (filtered.length === 0) {
-    container.innerHTML = '';
+    tbody.innerHTML = '';
     emptyState.style.display = 'block';
     return;
   }
 
   emptyState.style.display = 'none';
-  container.innerHTML = filtered.map((order, idx) => {
-    const date = new Date(order.created_at);
-    const dateStr = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    const initials = getInitials(order.supplier_name);
+  tbody.innerHTML = filtered.map((order, idx) => {
     const orderNum = order.order_number ? order.order_number.toString().padStart(4, '0') : order.id;
     return `
-      <div class="order-card" style="animation: fade-in-up 0.5s var(--ease-out) ${idx * 0.05}s both">
-        <div class="order-card__id">#${orderNum}</div>
-        <div class="order-card__avatar">${initials}</div>
-        <div class="order-card__info">
-          <div class="order-card__supplier">${escapeHtml(order.supplier_name)}</div>
-          <div class="order-card__meta">
-            <span class="order-card__meta-item">
-              <span class="material-icons-round">inventory_2</span>
-              ${order.itemCount || 0} items
-            </span>
-            <span class="order-card__meta-item">
-              <span class="material-icons-round">calendar_today</span>
-              ${dateStr}
-            </span>
-          </div>
-        </div>
-        <div class="order-card__stat">
-          <span class="order-card__stat-value">${order.itemCount || 0}</span>
-          <span class="order-card__stat-label">TOTAL QTY</span>
-        </div>
-        <div class="order-card__actions">
-          <button class="btn-detail-action btn-detail-action--edit" onclick="viewDetail(${order.id})" title="View Detail" style="padding: 6px 14px; font-size: 0.7rem;">
-            <span class="material-icons-round" style="font-size: 16px;">visibility</span>
-            VIEW DETAIL
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+        <td style="padding: 18px 12px 18px 24px; color: var(--accent-orange); font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 0.95rem; white-space: nowrap;">#${orderNum}</td>
+        <td style="padding: 18px 12px; font-weight: 600; color: var(--text-primary); font-size: 0.95rem; white-space: nowrap;">${escapeHtml(order.supplier_name)}</td>
+        <td style="padding: 18px 24px; text-align: right; font-weight: 700; color: var(--text-primary); font-family: 'Outfit', sans-serif; font-size: 1rem; white-space: nowrap;">${order.itemCount || 0} Items</td>
+        <td style="padding: 18px 12px; text-align: right;">
+          <button class="btn-view-detail" onclick="viewDetail(${order.id})">
+            <span class="material-icons-round" style="font-size: 18px;">description</span>
+            View Detail
           </button>
-          <button class="btn-card-action btn-card-action--rose" onclick="deleteOrder(${order.id})" title="Delete">
-            <span class="material-icons-round">delete</span>
+        </td>
+        <td style="padding: 18px 24px; text-align: center;">
+          <button onclick="deleteOrder(${order.id})" style="background: rgba(244, 63, 94, 0.1); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.2); padding: 8px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease;" onmouseover="this.style.background='var(--accent-rose)'; this.style.color='#fff'" onmouseout="this.style.background='rgba(244, 63, 94, 0.1)'; this.style.color='var(--accent-rose)'">
+            <span class="material-icons-round" style="font-size: 18px;">delete_outline</span>
           </button>
-        </div>
-      </div>
+        </td>
+      </tr>
     `;
   }).join('');
-}
-
-function getInitials(name) {
-  if (!name) return '??';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-  return name.substring(0, 2).toUpperCase();
 }
 
 window.viewDetail = async (id) => {
   const order = allOrders.find(o => o.id === id);
   if (!order) return;
   currentOrder = order;
-  showModal(order, order.items || []);
+
+  document.getElementById('pdf-modal').classList.add('show');
+  showPdfLoading();
+  document.getElementById('pdf-modal-title').textContent = `Purchase Order — ${order.supplier_name}`;
+
+  const itemsResult = await window.api.getOrderItems(order.id);
+  if (!itemsResult.success) return;
+
+  const pdfResult = await window.api.downloadOrderPdf({
+    supplierName: order.supplier_name,
+    phone: order.phone_number,
+    email: order.email,
+    address: order.supplier_address,
+    orderId: order.id,
+    items: itemsResult.items
+  });
+
+  if (pdfResult && pdfResult.success) {
+    currentPdfPath = pdfResult.filePath;
+    await displayPdf(pdfResult.filePath);
+  }
 };
 
-window.downloadOrder = async (id) => {
-    const order = allOrders.find(o => o.id === id);
-    if (!order) return;
-    
-    showToast('Generating PDF...');
-    const result = await window.api.downloadOrderPdf({
-        supplierName: order.supplier_name,
-        phone: order.phone_number,
-        email: order.email,
-        address: order.supplier_address,
-        orderId: order.id,
-        items: order.items
-    });
-    
-    if (result.success) {
-        showToast('PDF saved in Desktop/ASPORTS_ORDERS!');
-    } else {
-        showToast('Download failed: ' + result.error, 'error');
-    }
-};
+function showPdfLoading() {
+  document.getElementById('pdf-modal-body').innerHTML = `
+    <div class="pdf-loading">
+      <div class="spinner"></div>
+      <span>Generating PDF preview...</span>
+    </div>
+  `;
+}
 
-window.shareOrder = async (id) => {
-    const order = allOrders.find(o => o.id === id);
-    if (!order) return;
-    
-    showToast('Preparing share...');
-    const result = await window.api.downloadOrderPdf({
-        supplierName: order.supplier_name,
-        phone: order.phone_number,
-        email: order.email,
-        address: order.supplier_address,
-        orderId: order.id,
-        items: order.items
-    });
-    
-    if (result.success) {
-        const pdfRes = await window.api.readOrderPdf(result.filePath);
-        if (pdfRes.success) {
-            const filename = `Order_${order.id}_${order.supplier_name.replace(/\s+/g, '_')}.pdf`;
-            const file = new File([pdfRes.data], filename, { type: 'application/pdf' });
-            
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    files: [file],
-                    title: 'Purchase Order',
-                    text: `Order for ${order.supplier_name}`
-                });
-            } else {
-                await window.api.copyFileToClipboard(result.filePath);
-                showToast('Path copied to clipboard');
-            }
-        }
-    }
-};
+async function displayPdf(filePath) {
+  const body = document.getElementById('pdf-modal-body');
+  const readResult = await window.api.readOrderPdf(filePath);
+  if (readResult && readResult.success) {
+    const blob = new Blob([readResult.data], { type: 'application/pdf' });
+    const dataUrl = URL.createObjectURL(blob);
+    body.innerHTML = `<embed src="${dataUrl}" type="application/pdf" style="width: 100%; height: 100%; border-radius: 8px;">`;
+  } else {
+    body.innerHTML = '<p style="color: var(--accent-rose); text-align: center; padding: 40px;">Could not read PDF file.</p>';
+  }
+}
 
 window.deleteOrder = async (id) => {
     if (confirm('Are you sure you want to delete this order?')) {
         const result = await window.api.deleteOrder(id);
         if (result.success) {
             showToast('Order deleted');
+            document.getElementById('pdf-modal').classList.remove('show');
             loadOrders();
         } else {
             showToast('Delete failed: ' + result.error, 'error');
@@ -182,47 +145,29 @@ window.deleteOrder = async (id) => {
     }
 };
 
-function showModal(order, items) {
-  const orderNum = order.order_number ? order.order_number.toString().padStart(4, '0') : order.id;
-  document.getElementById('modal-order-id').textContent = '#' + orderNum;
-  document.getElementById('modal-supplier').textContent = order.supplier_name;
-  
-  const date = new Date(order.created_at);
-  document.getElementById('modal-date').textContent = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+// PDF Modal Actions
+document.getElementById('btn-pdf-download').addEventListener('click', () => {
+    if (currentPdfPath) window.api.openOrdersFolder();
+});
 
-  // Handle supplier details
-  document.getElementById('modal-phone').textContent = order.phone_number || 'N/A';
-  document.getElementById('modal-email').textContent = order.email || 'N/A';
-  document.getElementById('modal-address').textContent = order.supplier_address || 'N/A';
+document.getElementById('btn-pdf-close').addEventListener('click', () => {
+  document.getElementById('pdf-modal').classList.remove('show');
+});
 
-  const tbody = document.getElementById('modal-items-body');
-  tbody.innerHTML = items.map((item, index) => `
-    <tr>
-      <td>${index + 1}</td>
-      <td style="font-weight: 500; color: var(--text-primary);">${escapeHtml(item.product)}</td>
-      <td style="text-align: right; font-weight: 700; color: var(--accent-cyan);">${item.qty}</td>
-    </tr>
-  `).join('');
+document.getElementById('btn-pdf-back').addEventListener('click', () => {
+  document.getElementById('pdf-modal').classList.remove('show');
+});
 
-  // Reset to View section
-  document.getElementById('modal-view-section').style.display = 'block';
-  document.getElementById('modal-edit-section').style.display = 'none';
-  document.getElementById('btn-modal-edit').style.display = '';
-  document.getElementById('btn-modal-download').style.display = '';
-  document.getElementById('btn-modal-share').style.display = '';
-
-  document.getElementById('modal-overlay').classList.add('show');
-}
-
-function closeModal() {
-  document.getElementById('modal-overlay').classList.remove('show');
-}
+document.getElementById('btn-pdf-delete').addEventListener('click', () => {
+    if (currentOrder) deleteOrder(currentOrder.id);
+});
 
 // ─── Edit Mode Functionality ──────────────────────────────────
-document.getElementById('btn-modal-edit').addEventListener('click', () => {
+document.getElementById('btn-pdf-edit').addEventListener('click', () => {
     if (!currentOrder) return;
     
     // Populate form
+    document.getElementById('edit-modal-order-id').textContent = '#' + (currentOrder.order_number || currentOrder.id);
     document.getElementById('edit-supplier').value = currentOrder.supplier_name;
     document.getElementById('edit-phone').value = currentOrder.phone_number || '';
     document.getElementById('edit-email').value = currentOrder.email || '';
@@ -233,22 +178,19 @@ document.getElementById('btn-modal-edit').addEventListener('click', () => {
     container.innerHTML = '';
     currentOrder.items.forEach(item => addEditItemRow(item.product, item.qty));
     
-    // Toggle sections
-    document.getElementById('modal-view-section').style.display = 'none';
-    document.getElementById('modal-edit-section').style.display = 'block';
-    document.getElementById('btn-modal-edit').style.display = 'none';
-    document.getElementById('btn-modal-download').style.display = 'none';
-    document.getElementById('btn-modal-share').style.display = 'none';
+    // Show edit modal
+    document.getElementById('edit-modal-overlay').classList.add('show');
 });
 
 function addEditItemRow(product = '', qty = 1) {
     const container = document.getElementById('edit-items-container');
     const div = document.createElement('div');
     div.className = 'edit-item-row';
+    div.style = 'display: flex; gap: 10px; margin-bottom: 10px; align-items: center;';
     div.innerHTML = `
         <input type="text" class="form-input edit-item-product" placeholder="Product name" value="${escapeHtml(product)}" style="flex: 2;">
         <input type="number" class="form-input edit-item-qty" placeholder="Qty" value="${qty}" style="flex: 1;" min="1">
-        <button class="btn-remove-item material-icons-round" onclick="this.parentElement.remove()">delete</button>
+        <button class="btn-remove-item material-icons-round" onclick="this.parentElement.remove()" style="background: none; border: none; color: var(--accent-rose); cursor: pointer;">delete</button>
     `;
     container.appendChild(div);
 }
@@ -256,11 +198,11 @@ function addEditItemRow(product = '', qty = 1) {
 document.getElementById('btn-add-edit-item').addEventListener('click', () => addEditItemRow());
 
 document.getElementById('btn-cancel-edit').addEventListener('click', () => {
-    document.getElementById('modal-view-section').style.display = 'block';
-    document.getElementById('modal-edit-section').style.display = 'none';
-    document.getElementById('btn-modal-edit').style.display = '';
-    document.getElementById('btn-modal-download').style.display = '';
-    document.getElementById('btn-modal-share').style.display = '';
+    document.getElementById('edit-modal-overlay').classList.remove('show');
+});
+
+document.getElementById('btn-edit-close').addEventListener('click', () => {
+    document.getElementById('edit-modal-overlay').classList.remove('show');
 });
 
 document.getElementById('btn-save-edit').addEventListener('click', async () => {
@@ -294,27 +236,16 @@ document.getElementById('btn-save-edit').addEventListener('click', async () => {
     const result = await window.api.updateOrder(updateData);
     if (result.success) {
         showToast('Order updated successfully');
-        closeModal();
+        document.getElementById('edit-modal-overlay').classList.remove('show');
+        // Refresh PDF preview
+        viewDetail(currentOrder.id);
         loadOrders();
     } else {
         showToast('Update failed: ' + result.error, 'error');
     }
 });
 
-// Modal Actions
-document.getElementById('btn-modal-download').addEventListener('click', () => {
-    if (currentOrder) downloadOrder(currentOrder.id);
-});
-
-document.getElementById('btn-modal-share').addEventListener('click', () => {
-    if (currentOrder) shareOrder(currentOrder.id);
-});
-
-document.getElementById('modal-close').addEventListener('click', closeModal);
-document.getElementById('modal-overlay').addEventListener('click', (e) => {
-  if (e.target === document.getElementById('modal-overlay')) closeModal();
-});
-
+// Search functionality
 document.getElementById('search-input').addEventListener('input', () => {
   renderOrders(allOrders);
 });
@@ -339,7 +270,7 @@ function showToast(message, type = 'success') {
 
 function escapeHtml(text) {
   const div = document.createElement('div');
-  div.textContent = text;
+  div.textContent = text || '';
   return div.innerHTML;
 }
 

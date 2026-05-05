@@ -1,9 +1,11 @@
+require('dotenv').config();
 const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
 const path = require('path');
 const db = require('./database/db');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const os = require('os');
+const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
 
@@ -46,37 +48,38 @@ function createWindow() {
 // Save invoice + items
 ipcMain.handle('save-invoice', async (event, invoiceData) => {
   try {
-    const { customerName, phone, email, address, items, paidAmount, dueAmount } = invoiceData;
-    const totalAmount = items.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    const { customerName, phone, email, address, items, paidAmount, dueAmount, discountAmount = 0 } = invoiceData;
+    const subTotal = items.reduce((sum, item) => sum + (item.qty * item.price * (1 + (item.gstPercent || 0) / 100)), 0);
+    const totalAmount = Math.max(0, subTotal - discountAmount);
 
     const insertInvoice = db.prepare(
-      `INSERT INTO sales_invoices (customer_name, phone_number, email, billing_address, total_amount, invoice_number, paid_amount, due_amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))`
+      `INSERT INTO sales_invoices (customer_name, phone_number, email, billing_address, total_amount, invoice_number, paid_amount, due_amount, discount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))`
     );
     const insertItem = db.prepare(
-      'INSERT INTO sales_items (invoice_id, product, qty, price) VALUES (?, ?, ?, ?)'
+      'INSERT INTO sales_items (invoice_id, product, qty, price, gst_percent) VALUES (?, ?, ?, ?, ?)'
     );
 
-    const transaction = (customerName, phone, email, address, totalAmount, items, paid, due) => {
+    const transaction = (customerName, phone, email, address, totalAmount, items, paid, due, disc) => {
       // Get next invoice number
       const lastInv = db.prepare('SELECT MAX(invoice_number) as max_inv FROM sales_invoices').get();
       const invoiceNumber = (lastInv && lastInv.max_inv && lastInv.max_inv >= 2026100001) ? lastInv.max_inv + 1 : 2026100001;
 
-      const result = insertInvoice.run(customerName, phone, email, address, totalAmount, invoiceNumber, paid, due);
+      const result = insertInvoice.run(customerName, phone, email, address, totalAmount, invoiceNumber, paid, due, disc);
       const invoiceId = result.lastInsertRowid;
 
       for (const item of items) {
-        insertItem.run(invoiceId, item.product, item.qty, item.price);
+        insertItem.run(invoiceId, item.product, item.qty, item.price, item.gstPercent || 0);
       }
 
       return { invoiceId, totalAmount };
     };
 
-    const result = transaction(customerName, phone, email, address, totalAmount, items, paidAmount, dueAmount);
-    
+    const res = transaction(customerName, phone, email, address, totalAmount, items, paidAmount, dueAmount, discountAmount);
+
     // Fetch the invoice number we just created to return it to the frontend
-    const savedInv = db.prepare('SELECT invoice_number FROM sales_invoices WHERE id = ?').get(result.invoiceId);
-    
-    return { success: true, ...result, invoiceNumber: savedInv?.invoice_number };
+    const savedInv = db.prepare('SELECT invoice_number FROM sales_invoices WHERE id = ?').get(res.invoiceId);
+
+    return { success: true, ...res, invoiceNumber: savedInv?.invoice_number };
   } catch (error) {
     console.error('Error saving invoice:', error);
     return { success: false, error: error.message };
@@ -133,11 +136,26 @@ ipcMain.handle('clear-customer-dues', async (event, { name, phone }) => {
       SET due_amount = 0, paid_amount = total_amount 
       WHERE LOWER(customer_name) = LOWER(?) AND (phone_number = ? OR ? IS NULL OR phone_number IS NULL)
     `);
-    
+
     update.run(name, phone, phone);
     return { success: true };
   } catch (error) {
     console.error('Error clearing customer dues:', error);
+    return { success: false, error: error.message };
+  }
+});
+// Clear dues for a specific invoice
+ipcMain.handle('clear-invoice-dues', async (event, invoiceId) => {
+  try {
+    const update = db.prepare(`
+      UPDATE sales_invoices 
+      SET due_amount = 0, paid_amount = total_amount 
+      WHERE id = ?
+    `);
+    update.run(invoiceId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error clearing invoice dues:', error);
     return { success: false, error: error.message };
   }
 });
@@ -184,7 +202,7 @@ ipcMain.handle('delete-order', async (event, orderId) => {
 ipcMain.handle('save-order', async (event, data) => {
   try {
     const { supplierName, phone, email, address, items } = data;
-    
+
     const insertOrder = db.prepare(`
       INSERT INTO purchase_orders (supplier_name, phone_number, email, supplier_address, order_number, created_at) 
       VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
@@ -227,21 +245,21 @@ ipcMain.handle('get-next-order-number', async () => {
 // Save Purchase Bill
 ipcMain.handle('save-bill', async (event, data) => {
   try {
-    const { supplierName, supplierAddress, phone, email, invoiceNumber, billDate, dueDate, totalAmount, paidAmount, dueAmount, items } = data;
+    const { supplierName, supplierAddress, phone, email, invoiceNumber, billDate, dueDate, totalAmount, discount = 0, paidAmount, dueAmount, remarks, items } = data;
     // Determine status: 'pending' if there is a due amount, 'paid' if fully paid
     const billStatus = (dueAmount > 0) ? 'pending' : 'paid';
-    const insertBill = db.prepare(`INSERT INTO purchase_bills (supplier_name, supplier_address, phone_number, email, invoice_number, bill_date, due_date, total_amount, paid_amount, due_amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`);
+    const insertBill = db.prepare(`INSERT INTO purchase_bills (supplier_name, supplier_address, phone_number, email, invoice_number, bill_date, due_date, total_amount, discount, paid_amount, due_amount, status, remarks, show_remarks_pdf, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`);
     const insertItem = db.prepare('INSERT INTO purchase_items (bill_id, product, qty, rate, gst_percent) VALUES (?, ?, ?, ?, ?)');
 
-    const transaction = db.transaction((supplier, address, sPhone, sEmail, invoice, bDate, dDate, total, paid, due, status, billItems) => {
-      const result = insertBill.run(supplier, address, sPhone, sEmail, invoice, bDate, dDate, total, paid, due, status);
+    const transaction = db.transaction((supplier, address, sPhone, sEmail, invoice, bDate, dDate, total, disc, paid, due, status, rem, showRem, billItems) => {
+      const result = insertBill.run(supplier, address, sPhone, sEmail, invoice, bDate, dDate, total, disc, paid, due, status, rem, showRem);
       const billId = result.lastInsertRowid;
       for (const item of billItems) {
         insertItem.run(billId, item.product, item.qty, item.rate, item.gstPercent || 0);
       }
     });
 
-    transaction(supplierName, supplierAddress || null, phone || null, email || null, invoiceNumber, billDate || null, dueDate || null, totalAmount, paidAmount || 0, dueAmount || 0, billStatus, items);
+    transaction(supplierName, supplierAddress || null, phone || null, email || null, invoiceNumber, billDate || null, dueDate || null, totalAmount, discount, paidAmount || 0, dueAmount || 0, billStatus, remarks || null, data.showRemarks ? 1 : 0, items);
     return { success: true };
   } catch (error) {
     console.error('Error saving purchase bill:', error);
@@ -275,7 +293,7 @@ ipcMain.handle('get-order-items', async (event, orderId) => {
 ipcMain.handle('update-order', async (event, data) => {
   try {
     const { orderId, supplierName, phone, email, address, items } = data;
-    
+
     const updateOrder = db.prepare(`
       UPDATE purchase_orders 
       SET supplier_name = ?, phone_number = ?, email = ?, supplier_address = ? 
@@ -348,8 +366,27 @@ ipcMain.handle('update-bill-status', async (event, { billId, status }) => {
 // Clear Bill Dues (All Paid)
 ipcMain.handle('clear-bill-dues', async (event, billId) => {
   try {
+    // Snapshot old values for audit trail
+    const oldBill = db.prepare('SELECT paid_amount, due_amount, status FROM purchase_bills WHERE id = ?').get(billId);
+
     const update = db.prepare('UPDATE purchase_bills SET paid_amount = total_amount, due_amount = 0, status = ? WHERE id = ?');
     update.run('paid', billId);
+
+    // Log the change
+    if (oldBill) {
+      const editGroup = new Date().toISOString();
+      const insertLog = db.prepare('INSERT INTO bill_edit_history (bill_id, edit_group, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?)');
+      const updatedBill = db.prepare('SELECT paid_amount FROM purchase_bills WHERE id = ?').get(billId);
+      if (String(oldBill.paid_amount) !== String(updatedBill.paid_amount)) {
+        insertLog.run(billId, editGroup, 'Paid Amount', `₹${Number(oldBill.paid_amount || 0).toFixed(2)}`, `₹${Number(updatedBill.paid_amount || 0).toFixed(2)}`);
+      }
+      if (String(oldBill.due_amount) !== '0') {
+        insertLog.run(billId, editGroup, 'Due Amount', `₹${Number(oldBill.due_amount || 0).toFixed(2)}`, '₹0.00');
+      }
+      if (oldBill.status !== 'paid') {
+        insertLog.run(billId, editGroup, 'Status', oldBill.status || 'pending', 'paid');
+      }
+    }
     return { success: true };
   } catch (error) {
     console.error('Error clearing bill dues:', error);
@@ -390,6 +427,209 @@ ipcMain.handle('delete-bill', async (event, billId) => {
     return { success: true };
   } catch (error) {
     console.error('Error deleting purchase bill:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Update Purchase Bill (all fields + items) — with audit trail
+ipcMain.handle('update-bill', async (event, data) => {
+  try {
+    const { billId, supplierName, supplierAddress, phone, email, invoiceNumber, billDate, dueDate, totalAmount, discount = 0, paidAmount, dueAmount, remarks, items } = data;
+    const billStatus = (dueAmount > 0) ? 'pending' : 'paid';
+
+    // ── Snapshot old bill + items BEFORE update ──
+    const oldBill = db.prepare('SELECT * FROM purchase_bills WHERE id = ?').get(billId);
+    const oldItems = db.prepare('SELECT product, qty, rate, gst_percent FROM purchase_items WHERE bill_id = ? ORDER BY id').all(billId);
+
+    const updateBill = db.prepare(`
+      UPDATE purchase_bills 
+      SET supplier_name = ?, supplier_address = ?, phone_number = ?, email = ?, 
+          invoice_number = ?, bill_date = ?, due_date = ?, total_amount = ?, 
+          discount = ?, paid_amount = ?, due_amount = ?, status = ?, remarks = ?, show_remarks_pdf = ?
+      WHERE id = ?
+    `);
+    const deleteItems = db.prepare('DELETE FROM purchase_items WHERE bill_id = ?');
+    const insertItem = db.prepare('INSERT INTO purchase_items (bill_id, product, qty, rate, gst_percent) VALUES (?, ?, ?, ?, ?)');
+    const insertLog = db.prepare('INSERT INTO bill_edit_history (bill_id, edit_group, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?)');
+
+    const transaction = db.transaction((id, supplier, address, sPhone, sEmail, invoice, bDate, dDate, total, disc, paid, due, status, rem, showRem, billItems) => {
+      // Apply the update
+      updateBill.run(supplier, address, sPhone, sEmail, invoice, bDate, dDate, total, disc, paid, due, status, rem, showRem, id);
+      deleteItems.run(id);
+      for (const item of billItems) {
+        insertItem.run(id, item.product, item.qty, item.rate, item.gstPercent || 0);
+      }
+
+      // ── Diff & log changes ──
+      if (oldBill) {
+        const editGroup = new Date().toISOString();
+        const fieldMap = [
+          ['Supplier Name', oldBill.supplier_name, supplier],
+          ['Supplier Address', oldBill.supplier_address, address],
+          ['Phone', oldBill.phone_number, sPhone],
+          ['Email', oldBill.email, sEmail],
+          ['Invoice Number', oldBill.invoice_number, invoice],
+          ['Bill Date', oldBill.bill_date, bDate],
+          ['Due Date', oldBill.due_date, dDate],
+          ['Total Amount', `₹${Number(oldBill.total_amount || 0).toFixed(2)}`, `₹${Number(total || 0).toFixed(2)}`],
+          ['Discount', `₹${Number(oldBill.discount || 0).toFixed(2)}`, `₹${Number(disc || 0).toFixed(2)}`],
+          ['Paid Amount', `₹${Number(oldBill.paid_amount || 0).toFixed(2)}`, `₹${Number(paid || 0).toFixed(2)}`],
+          ['Due Amount', `₹${Number(oldBill.due_amount || 0).toFixed(2)}`, `₹${Number(due || 0).toFixed(2)}`],
+          ['Status', oldBill.status, status],
+          ['Remarks', oldBill.remarks, rem],
+        ];
+
+        for (const [label, oldVal, newVal] of fieldMap) {
+          const o = (oldVal == null ? '' : String(oldVal)).trim();
+          const n = (newVal == null ? '' : String(newVal)).trim();
+          if (o !== n) {
+            insertLog.run(id, editGroup, label, o || '(empty)', n || '(empty)');
+          }
+        }
+
+        // ── Track item-level changes ──
+        const fmtItem = (it) => `${it.product} × ${it.qty} @ ₹${Number(it.rate || 0).toFixed(2)} (GST ${it.gst_percent || it.gstPercent || 0}%)`;
+        const oldItemStr = oldItems.map(fmtItem).join(' | ');
+        const newItemStr = billItems.map(fmtItem).join(' | ');
+        if (oldItemStr !== newItemStr) {
+          insertLog.run(id, editGroup, 'Items', oldItemStr || '(none)', newItemStr || '(none)');
+        }
+      }
+    });
+
+    transaction(billId, supplierName, supplierAddress || null, phone || null, email || null, invoiceNumber, billDate || null, dueDate || null, totalAmount, discount, paidAmount || 0, dueAmount || 0, billStatus, remarks || null, data.showRemarks ? 1 : 0, items);
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating purchase bill:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get Bill Edit History (Audit Trail)
+ipcMain.handle('get-bill-edit-history', async (event, billId) => {
+  try {
+    const logs = db.prepare('SELECT * FROM bill_edit_history WHERE bill_id = ? ORDER BY changed_at DESC, id DESC').all(billId);
+    return { success: true, logs };
+  } catch (error) {
+    console.error('Error fetching bill edit history:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ─── Password & OTP Management ──────────────────────────────
+
+// Get edit password from DB
+ipcMain.handle('get-edit-password', async () => {
+  try {
+    const row = db.prepare("SELECT value FROM app_settings WHERE key = 'edit_password'").get();
+    return { success: true, password: row ? row.value : 'asports@2026' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Update edit password
+ipcMain.handle('update-edit-password', async (event, newPassword) => {
+  try {
+    db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('edit_password', ?)").run(newPassword);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Get registered email (masked for display)
+ipcMain.handle('get-registered-email', async () => {
+  try {
+    const row = db.prepare("SELECT value FROM app_settings WHERE key = 'registered_email'").get();
+    const email = row ? row.value : '';
+    const masked = email ? email.replace(/^(.{2})(.*)(@.*)$/, (m, a, b, c) => a + '*'.repeat(b.length) + c) : '';
+    return { success: true, masked, raw: email };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// OTP state
+let currentOTP = null;
+let otpExpiry = null;
+
+// Send OTP via email
+ipcMain.handle('send-otp', async (event, inputEmail) => {
+  try {
+    const row = db.prepare("SELECT value FROM app_settings WHERE key = 'registered_email'").get();
+    const registeredEmail = row ? row.value : '';
+
+    if (!registeredEmail || inputEmail.toLowerCase().trim() !== registeredEmail.toLowerCase().trim()) {
+      return { success: false, error: 'Email does not match the registered email.' };
+    }
+
+    const smtpRow = db.prepare("SELECT value FROM app_settings WHERE key = 'smtp_app_password'").get();
+    const smtpPassword = smtpRow ? smtpRow.value : '';
+
+    if (!smtpPassword) {
+      return { success: false, error: 'Email service not configured. Please set your Gmail App Password in settings.' };
+    }
+
+    // Generate 6-digit OTP
+    currentOTP = String(Math.floor(100000 + Math.random() * 900000));
+    otpExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: registeredEmail,
+        pass: smtpPassword
+      }
+    });
+
+    await transporter.sendMail({
+      from: `"ASPORTS ZONE Billing" <${registeredEmail}>`,
+      to: registeredEmail,
+      subject: 'Password Reset OTP — ASPORTS Billing',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #0f0f23; color: #fff; border-radius: 16px;">
+          <h2 style="color: #00e5ff; margin-top: 0;">🔐 Password Reset</h2>
+          <p style="color: #aaa;">You requested a password reset for the ASPORTS Billing System.</p>
+          <div style="background: #1a1a3e; padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #00e5ff;">${currentOTP}</span>
+          </div>
+          <p style="color: #aaa; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>. Do not share it with anyone.</p>
+          <hr style="border: none; border-top: 1px solid #222; margin: 20px 0;">
+          <p style="color: #666; font-size: 11px;">If you did not request this, ignore this email.</p>
+        </div>
+      `
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending OTP:', error);
+    return { success: false, error: 'Failed to send OTP. Check your email/SMTP configuration.' };
+  }
+});
+
+// Verify OTP
+ipcMain.handle('verify-otp', async (event, otp) => {
+  try {
+    if (!currentOTP || !otpExpiry) {
+      return { success: false, error: 'No OTP was requested. Please try again.' };
+    }
+    if (Date.now() > otpExpiry) {
+      currentOTP = null;
+      otpExpiry = null;
+      return { success: false, error: 'OTP has expired. Please request a new one.' };
+    }
+    if (otp.trim() !== currentOTP) {
+      return { success: false, error: 'Invalid OTP. Please check and try again.' };
+    }
+    // OTP verified — clear it
+    currentOTP = null;
+    otpExpiry = null;
+    return { success: true };
+  } catch (error) {
     return { success: false, error: error.message };
   }
 });
@@ -567,6 +807,32 @@ ipcMain.handle('update-customer-details', async (event, data) => {
   }
 });
 
+// Update Invoice Items (and recalculate total)
+ipcMain.handle('update-invoice-items', async (event, { invoiceId, items, discountAmount = 0 }) => {
+  try {
+    const subTotal = items.reduce((sum, it) => sum + (it.qty * it.price * (1 + (it.gstPercent || 0) / 100)), 0);
+    const totalAmount = Math.max(0, subTotal - discountAmount);
+
+    const updateInvoice = db.prepare('UPDATE sales_invoices SET total_amount = ?, discount = ? WHERE id = ?');
+    const deleteItems = db.prepare('DELETE FROM sales_items WHERE invoice_id = ?');
+    const insertItem = db.prepare('INSERT INTO sales_items (invoice_id, product, qty, price, gst_percent) VALUES (?, ?, ?, ?, ?)');
+
+    const transaction = db.transaction((id, total, disc, invoiceItems) => {
+      updateInvoice.run(total, disc, id);
+      deleteItems.run(id);
+      for (const item of invoiceItems) {
+        insertItem.run(id, item.product, item.qty, item.price, item.gstPercent || 0);
+      }
+    });
+
+    transaction(invoiceId, totalAmount, discountAmount, items);
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating invoice items:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // ─── Sharing & File Handlers ────────────────────────────────
 
 // Open Invoice PDF
@@ -730,19 +996,19 @@ ipcMain.handle('print-invoice', async (event, { htmlContent, deviceName }) => {
 // ─── App Lifecycle ──────────────────────────────────────────
 
 function numberToWords(num) {
-    if (num === 0) return 'Zero Rupees Only';
-    const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
-    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-    if ((num = num.toString()).length > 9) return 'overflow';
-    const n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-    if (!n) return '';
-    let str = '';
-    str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
-    str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
-    str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
-    str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
-    str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) + 'Rupees Only' : 'Rupees Only';
-    return str.trim();
+  if (num === 0) return 'Zero Rupees Only';
+  const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  if ((num = num.toString()).length > 9) return 'overflow';
+  const n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+  if (!n) return '';
+  let str = '';
+  str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
+  str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
+  str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
+  str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
+  str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) + 'Rupees Only' : 'Rupees Only';
+  return str.trim();
 }
 
 // Download Invoice PDF
@@ -750,7 +1016,8 @@ ipcMain.handle('download-invoice-pdf', async (event, invoiceData) => {
   return new Promise((resolve) => {
     try {
       const { customerName, items, invoiceNumber, phone, email, address, paidAmount = 0, dueAmount = 0 } = invoiceData;
-      
+      const discountAmount = invoiceData.discountAmount !== undefined ? invoiceData.discountAmount : (invoiceData.discount || 0);
+
       const sanitizedName = customerName.replace(/[<>:"/\\|?*]/g, '').trim() || 'Invoice';
       const invNo = (invoiceNumber || 'NEW').toString().replace(/[<>:"/\\|?*]/g, '_').trim();
       const filename = `Invoice_${invNo}_${sanitizedName}.pdf`;
@@ -798,7 +1065,7 @@ ipcMain.handle('download-invoice-pdf', async (event, invoiceData) => {
       // Bill To Section (Left) & Payment Details (Right)
       doc.rect(margin + width / 2, 140, width / 2, 80).fill('#e6f2ff'); // Light blue background for right side
       doc.moveTo(margin + width / 2, 140).lineTo(margin + width / 2, 220).strokeColor('#000').stroke();
-      
+
       // Bill To Data
       doc.fillColor('#000');
       doc.font('Helvetica-Bold').fontSize(10).text('Bill To:', margin + 5, 145);
@@ -809,15 +1076,35 @@ ipcMain.handle('download-invoice-pdf', async (event, invoiceData) => {
       if (phone) doc.text('Phone: ' + phone, margin + 5, 205);
 
       // Payment Details Data
-      doc.font('Helvetica').fontSize(9).text('Payment Due Date:', margin + width / 2 + 5, 145);
-      doc.text('Payment Mode:', margin + width / 2 + 5, 158);
-      
-      if (dueAmount > 0) {
+      const subTotalItems = items.reduce((sum, item) => sum + (item.qty * (item.price || item.rate || 0)), 0);
+      const totalGst = items.reduce((sum, item) => sum + (item.qty * (item.price || item.rate || 0) * ((item.gstPercent || item.gst_percent || 0) / 100)), 0);
+      const totalGrandAmount = subTotalItems + totalGst;
+      const rightX = margin + width / 2 + 5;
+      const rightSpan = (width / 2) - 10;
+
+      doc.text('Total Grand Amount:', rightX, 158);
+      doc.text(`${totalGrandAmount.toFixed(2)}`, rightX, 158, { width: rightSpan - 5, align: 'right' });
+
+      doc.text('Discount:', rightX, 171);
+      doc.text(`${(discountAmount || 0).toFixed(2)}`, rightX, 171, { width: rightSpan - 5, align: 'right' });
+
+      doc.text('Amount Paid:', rightX, 184);
+      doc.text(`${(paidAmount || 0).toFixed(2)}`, rightX, 184, { width: rightSpan - 5, align: 'right' });
+
+      const finalDue = totalGrandAmount - (discountAmount || 0) - (paidAmount || 0);
+      const dueY = 197;
+
+      if (finalDue > 0) {
         // Yellow highlight for Due Amount
-        doc.rect(margin + width / 2 + 3, 170, (width / 2) - 10, 15).fill('#ffff00');
-        doc.fillColor('#000').font('Helvetica-Bold').text(`Due Amount: Rs. ${dueAmount.toFixed(2)}`, margin + width / 2 + 5, 174);
+        doc.rect(margin + width / 2 + 3, dueY - 4, (width / 2) - 10, 15).fill('#ffff00');
+        doc.fillColor('#000').font('Helvetica-Bold');
+        doc.text('Due Amount:', rightX, dueY);
+        doc.text(`${finalDue.toFixed(2)}`, rightX, dueY, { width: rightSpan - 5, align: 'right' });
+        doc.font('Helvetica');
       } else {
-        doc.fillColor('#000').font('Helvetica').text(`Due Amount: Rs. ${dueAmount.toFixed(2)}`, margin + width / 2 + 5, 174);
+        doc.fillColor('#000').font('Helvetica');
+        doc.text('Due Amount:', rightX, dueY);
+        doc.text(`${finalDue.toFixed(2)}`, rightX, dueY, { width: rightSpan - 5, align: 'right' });
       }
 
       // Horizontal line before table headers
@@ -829,10 +1116,11 @@ ipcMain.handle('download-invoice-pdf', async (event, invoiceData) => {
 
       const colXs = [
         margin,             // Description starts
-        margin + 230,       // HSN Code
-        margin + 290,       // Qty
-        margin + 340,       // Rate
-        margin + 410,       // Amount
+        margin + 200,       // HSN Code
+        margin + 260,       // Qty
+        margin + 310,       // Rate
+        margin + 380,       // GST %
+        margin + 440,       // Amount
         margin + width      // End
       ];
 
@@ -841,38 +1129,47 @@ ipcMain.handle('download-invoice-pdf', async (event, invoiceData) => {
       doc.text('HSN Code', colXs[1] + 5, yHeaders + 6);
       doc.text('Qty', colXs[2] + 5, yHeaders + 6, { width: colXs[3] - colXs[2] - 10, align: 'center' });
       doc.text('Rate', colXs[3] + 5, yHeaders + 6, { width: colXs[4] - colXs[3] - 10, align: 'center' });
-      doc.text('Amount', colXs[4] + 5, yHeaders + 6, { width: colXs[5] - colXs[4] - 10, align: 'center' });
+      doc.text('GST %', colXs[4] + 5, yHeaders + 6, { width: colXs[5] - colXs[4] - 10, align: 'center' });
+      doc.text('Amount', colXs[5] + 5, yHeaders + 6, { width: colXs[6] - colXs[5] - 10, align: 'center' });
 
       // Draw all vertical lines for the table all the way down to Total Row (y = 590)
-      const tableBottom = 590;
+      const tableBottom = 610;
       doc.moveTo(colXs[1], yHeaders).lineTo(colXs[1], tableBottom).stroke();
       doc.moveTo(colXs[2], yHeaders).lineTo(colXs[2], tableBottom).stroke();
       doc.moveTo(colXs[3], yHeaders).lineTo(colXs[3], tableBottom).stroke();
       doc.moveTo(colXs[4], yHeaders).lineTo(colXs[4], tableBottom).stroke();
+      doc.moveTo(colXs[5], yHeaders).lineTo(colXs[5], tableBottom).stroke();
 
       // Render Items
       doc.font('Helvetica').fontSize(9);
       let rowY = 245;
-      let grandTotal = 0;
 
       items.forEach((item, index) => {
-        const total = item.qty * item.price;
-        grandTotal += total;
+        const itemBaseTotal = item.qty * (item.price || item.rate || 0);
+        const gstPct = item.gstPercent || item.gst_percent || 0;
+        const itemGstAmt = itemBaseTotal * (gstPct / 100);
+        const total = itemBaseTotal + itemGstAmt;
 
         doc.text(item.product, colXs[0] + 5, rowY, { width: colXs[1] - colXs[0] - 10 });
         doc.text('-', colXs[1] + 5, rowY, { width: colXs[2] - colXs[1] - 10, align: 'center' });
         doc.text(`${item.qty}`, colXs[2] + 5, rowY, { width: colXs[3] - colXs[2] - 10, align: 'center' });
-        doc.text(item.price.toFixed(2), colXs[3] + 5, rowY, { width: colXs[4] - colXs[3] - 10, align: 'right' });
-        doc.text(total.toFixed(2), colXs[4] + 5, rowY, { width: colXs[5] - colXs[4] - 10, align: 'right' });
+        const itemPrice = item.price || item.rate || 0;
+        doc.text(itemPrice.toFixed(2), colXs[3] + 5, rowY, { width: colXs[4] - colXs[3] - 10, align: 'right' });
+        doc.text(`${gstPct}%`, colXs[4] + 5, rowY, { width: colXs[5] - colXs[4] - 10, align: 'center' });
+        doc.text(itemBaseTotal.toFixed(2), colXs[5] + 5, rowY, { width: colXs[6] - colXs[5] - 10, align: 'right' });
 
         rowY += 15;
       });
 
-      // Total Row inside table
-      doc.moveTo(margin + 290, tableBottom).lineTo(margin + width, tableBottom).stroke(); // horizontal line for totals
-      doc.font('Helvetica-Bold');
-      doc.text('Total', colXs[3] + 5, tableBottom + 5, { width: colXs[4] - colXs[3] - 10, align: 'right' });
-      doc.text(grandTotal.toFixed(2), colXs[4] + 5, tableBottom + 5, { width: colXs[5] - colXs[4] - 10, align: 'right' });
+      // Draw Total Row at the bottom of the table
+      const footerY = tableBottom - 15;
+      doc.moveTo(margin, footerY).lineTo(margin + width, footerY).stroke();
+      doc.font('Helvetica-Bold').fontSize(9);
+      const totalQty = items.reduce((sum, it) => sum + it.qty, 0);
+      doc.text('Total', colXs[0] + 5, footerY + 4);
+      doc.text('-', colXs[1] + 5, footerY + 4, { width: colXs[2] - colXs[1] - 10, align: 'center' });
+      doc.text(`${totalQty}`, colXs[2] + 5, footerY + 4, { width: colXs[3] - colXs[2] - 10, align: 'center' });
+      doc.text(subTotalItems.toFixed(2), colXs[5] + 5, footerY + 4, { width: colXs[6] - colXs[5] - 10, align: 'right' });
 
       // End of table section
       const afterTableY = 610;
@@ -889,32 +1186,41 @@ ipcMain.handle('download-invoice-pdf', async (event, invoiceData) => {
       doc.text('No refunds will be processed under any circumstances.', margin + 5, afterTableY + 28);
       doc.text('The provider is not liable for any indirect or consequential', margin + 5, afterTableY + 38);
       doc.text('losses from the use of services/products.', margin + 5, afterTableY + 48);
+      doc.text("Subject to 'jodhpur' Jurisdiction only.", margin + 5, afterTableY + 58);
 
       // Right: Taxes
       doc.font('Helvetica-Bold').fontSize(9);
       const rightPadding = 5;
-      const rightSpan = margin + width - midX - (rightPadding * 2);
-      
+      const summarySpan = margin + width - midX - (rightPadding * 2);
+
       const taxesY = afterTableY + 5;
-      doc.text('Add : CGST @ 0%', midX + rightPadding, taxesY);
-      doc.text('-', midX + rightPadding, taxesY, { width: rightSpan, align: 'right' });
-      doc.text('Add : SGST @ 0%', midX + rightPadding, taxesY + 15);
-      doc.text('-', midX + rightPadding, taxesY + 15, { width: rightSpan, align: 'right' });
-      doc.text('Balance Received :', midX + rightPadding, taxesY + 30);
-      doc.text((paidAmount || 0).toFixed(2), midX + rightPadding, taxesY + 30, { width: rightSpan, align: 'right' });
-      doc.text('Balance Due :', midX + rightPadding, taxesY + 45);
-      doc.text((dueAmount || 0).toFixed(2), midX + rightPadding, taxesY + 45, { width: rightSpan, align: 'right' });
+      // totalGst already calculated above
+
+      doc.text(`CGST :`, midX + rightPadding, taxesY);
+      doc.text((totalGst / 2).toFixed(2), midX + rightPadding, taxesY, { width: summarySpan, align: 'right' });
+      doc.text(`SGST :`, midX + rightPadding, taxesY + 12);
+      doc.text((totalGst / 2).toFixed(2), midX + rightPadding, taxesY + 12, { width: summarySpan, align: 'right' });
+
+      doc.moveTo(midX + 160, taxesY + 24).lineTo(margin + width - 5, taxesY + 24).stroke();
+
+      const netTotal = totalGrandAmount - (discountAmount || 0);
+
+      doc.text(`Total Tax :`, midX + rightPadding, taxesY + 28);
+      doc.text(totalGst.toFixed(2), midX + rightPadding, taxesY + 28, { width: summarySpan, align: 'right' });
+
+      doc.text(`Discount :`, midX + rightPadding, taxesY + 40);
+      doc.text((discountAmount || 0).toFixed(2), midX + rightPadding, taxesY + 40, { width: summarySpan, align: 'right' });
 
       // Grand Total Box
       doc.rect(midX, 672, margin + width - midX, 18).fillAndStroke('#2f5597', '#000');
       doc.fillColor('#fff').text('Grand Total', midX + rightPadding, 677);
-      doc.text(grandTotal.toFixed(2), midX + rightPadding, 677, { width: rightSpan, align: 'right' });
+      doc.text(netTotal.toFixed(2), midX + rightPadding, 677, { width: summarySpan, align: 'right' });
 
       // Amount in Words Section
       doc.fillColor('#000');
       doc.moveTo(margin, 690).lineTo(margin + width, 690).stroke();
       doc.font('Helvetica-Bold').fontSize(9).text('Total Amount (₹ - In Words) :', margin + 5, 695);
-      doc.font('Helvetica').fontSize(9).text(numberToWords(Math.round(grandTotal)), margin + 145, 695);
+      doc.font('Helvetica').fontSize(9).text(numberToWords(Math.round(netTotal)), margin + 145, 695);
 
       // Business Signatory Section
       doc.moveTo(margin, 730).lineTo(margin + width, 730).stroke();
@@ -935,12 +1241,12 @@ ipcMain.handle('download-order-pdf', async (event, orderData) => {
   return new Promise((resolve) => {
     try {
       const { supplierName, items, orderNumber, phone, email, address } = orderData;
-      
+
       const sanitizedName = supplierName.replace(/[<>:"/\\|?*]/g, '').trim() || 'Order';
       const ordNo = (orderNumber || 'NEW').toString().padStart(4, '0').replace(/[<>:"/\\|?*]/g, '_').trim();
       const filename = `Order_${ordNo}_${sanitizedName}.pdf`;
       const ordersPath = path.join(os.homedir(), 'Desktop', 'ASPORTS_ORDERS');
-      
+
       const filePath = path.join(ordersPath, filename);
 
       // Ensure directory exists
@@ -983,7 +1289,7 @@ ipcMain.handle('download-order-pdf', async (event, orderData) => {
       // Supplier Details Section
       doc.rect(margin + width / 2, 140, width / 2, 80).fill('#f6f0ff'); // Light purple background
       doc.moveTo(margin + width / 2, 140).lineTo(margin + width / 2, 220).strokeColor('#000').stroke();
-      
+
       doc.fillColor('#000');
       doc.font('Helvetica-Bold').fontSize(10).text('Supplier Details:', margin + 5, 145);
       doc.text(supplierName.toUpperCase(), margin + 5, 158);
@@ -1022,6 +1328,14 @@ ipcMain.handle('download-order-pdf', async (event, orderData) => {
 
       const afterTableY = 610;
       doc.moveTo(margin, afterTableY).lineTo(margin + width, afterTableY).stroke();
+
+      // Left: Terms
+      doc.font('Helvetica-Bold').fontSize(9).text('Terms & conditions', margin + 5, afterTableY + 5);
+      doc.font('Helvetica').fontSize(8);
+      doc.text('Goods once sold will not be taken back.', margin + 5, afterTableY + 18);
+      doc.text("Subject to 'jodhpur' Jurisdiction only.", margin + 5, afterTableY + 28);
+      doc.text('Please check goods at the time of delivery.', margin + 5, afterTableY + 38);
+      doc.text('Interest @18% per annum will be charged on overdue.', margin + 5, afterTableY + 48);
 
       doc.moveTo(margin, 730).lineTo(margin + width, 730).stroke();
       doc.font('Helvetica-Bold').fontSize(10).text('For : ASPORTS ZONE', margin + 5, 740);
@@ -1072,16 +1386,16 @@ ipcMain.handle('ocr-bill-photo', async (event, imageSource) => {
       // Handle local file path
       const imageBuffer = fs.readFileSync(imageSource);
       base64Image = imageBuffer.toString('base64');
-      
+
       // Detect mime type from extension
       const ext = path.extname(imageSource).toLowerCase();
-      const mimeMap = { 
-        '.jpg': 'image/jpeg', 
-        '.jpeg': 'image/jpeg', 
-        '.png': 'image/png', 
-        '.webp': 'image/webp', 
-        '.gif': 'image/gif', 
-        '.bmp': 'image/bmp' 
+      const mimeMap = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.webp': 'image/webp',
+        '.gif': 'image/gif',
+        '.bmp': 'image/bmp'
       };
       mimeType = mimeMap[ext] || 'image/jpeg';
     }
@@ -1157,7 +1471,7 @@ Rules:
 
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content || '';
-    
+
     event.sender.send('ocr-progress', { progress: 1.0 });
 
     // Parse JSON from response (handle potential markdown code fences)
@@ -1207,13 +1521,23 @@ Rules:
 ipcMain.handle('download-bill-pdf', async (event, billData) => {
   return new Promise((resolve) => {
     try {
-      const { supplierName, supplierAddress, address, phone, email, invoiceNumber, billDate, dueDate, totalAmount, paidAmount = 0, dueAmount = 0, items } = billData;
-      
+      const { supplierName, supplierAddress, address, phone, email, invoiceNumber, billDate, dueDate, totalAmount, discount = 0, paidAmount = 0, dueAmount = 0, remarks, showRemarks, items } = billData;
+
+      // Pre-calculate totals for Payment Details display
+      const calcSubTotal = (items || []).reduce((sum, item) => sum + (item.qty * (item.rate || item.price || 0)), 0);
+      const calcTotalGst = (items || []).reduce((sum, item) => {
+        const base = item.qty * (item.rate || item.price || 0);
+        const gst = item.gstPercent || item.gst_percent || 0;
+        return sum + (base * (gst / 100));
+      }, 0);
+      const calcGrand = calcSubTotal + calcTotalGst;
+      const calcDue = calcGrand - (paidAmount || 0) - (discount || 0);
+
       const sanitizedName = (supplierName || 'Bill').replace(/[<>:"/\\|?*]/g, '').trim();
       const invNo = (invoiceNumber || 'NEW').toString().replace(/[<>:"/\\|?*]/g, '_').trim();
       const filename = `PurchaseBill_${invNo}_${sanitizedName}.pdf`;
       const billsPath = path.join(os.homedir(), 'Desktop', 'ASPORTS_PURCHASE_BILLS');
-      
+
       const filePath = path.join(billsPath, filename);
 
       // Ensure directory exists
@@ -1257,7 +1581,7 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
       // Supplier Details Section (Left) & Payment Details (Right)
       doc.rect(margin + width / 2, 140, width / 2, 80).fill('#e6ffe6'); // Light green background for right side
       doc.moveTo(margin + width / 2, 140).lineTo(margin + width / 2, 220).strokeColor('#000').stroke();
-      
+
       // Supplier Data (Left)
       doc.fillColor('#000');
       doc.font('Helvetica-Bold').fontSize(10).text('Supplier:', margin + 5, 145);
@@ -1269,25 +1593,38 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
 
       // Payment Details Data (Right)
       doc.font('Helvetica').fontSize(9);
+      const rightBoxSpan = (width / 2) - 10;
+
       if (dueDate) {
         const dueDateStr = new Date(dueDate).toLocaleDateString('en-IN').replace(/\//g, '-');
-        doc.text('Due Date: ' + dueDateStr, margin + width / 2 + 5, 145);
+        doc.text('Due Date:', margin + width / 2 + 5, 145);
+        doc.text(dueDateStr, margin + width / 2 + 5, 145, { width: rightBoxSpan, align: 'right' });
       } else {
-        doc.text('Due Date: N/A', margin + width / 2 + 5, 145);
+        doc.text('Due Date:', margin + width / 2 + 5, 145);
+        doc.text('N/A', margin + width / 2 + 5, 145, { width: rightBoxSpan, align: 'right' });
       }
-      doc.text('Bill Date: ' + dateStr, margin + width / 2 + 5, 158);
       
-      if (dueAmount > 0) {
+      doc.text('Bill Date:', margin + width / 2 + 5, 155);
+      doc.text(dateStr, margin + width / 2 + 5, 155, { width: rightBoxSpan, align: 'right' });
+
+      doc.text('Total Grand Amount:', margin + width / 2 + 5, 166);
+      doc.text('Rs. ' + calcGrand.toFixed(2), margin + width / 2 + 5, 166, { width: rightBoxSpan, align: 'right' });
+      
+      doc.text('Discount:', margin + width / 2 + 5, 177);
+      doc.text('Rs. ' + (discount || 0).toFixed(2), margin + width / 2 + 5, 177, { width: rightBoxSpan, align: 'right' });
+      
+      doc.text('Amount Paid:', margin + width / 2 + 5, 188);
+      doc.text('Rs. ' + (paidAmount || 0).toFixed(2), margin + width / 2 + 5, 188, { width: rightBoxSpan, align: 'right' });
+
+      if (calcDue > 0) {
         // Yellow highlight for Due Amount
-        doc.rect(margin + width / 2 + 3, 172, (width / 2) - 10, 15).fill('#ffff00');
-        doc.fillColor('#000').font('Helvetica-Bold').text(`Due Amount: Rs. ${dueAmount.toFixed(2)}`, margin + width / 2 + 5, 176);
+        doc.rect(margin + width / 2 + 3, 198, (width / 2) - 10, 15).fill('#ffff00');
+        doc.fillColor('#000').font('Helvetica-Bold');
+        doc.text('Due Amount:', margin + width / 2 + 5, 202);
+        doc.text('Rs. ' + calcDue.toFixed(2), margin + width / 2 + 5, 202, { width: rightBoxSpan, align: 'right' });
       } else {
-        doc.fillColor('#000').font('Helvetica-Bold').text(`Paid in Full`, margin + width / 2 + 5, 176);
+        doc.fillColor('#000').font('Helvetica-Bold').text('Paid in Full', margin + width / 2 + 5, 202, { width: rightBoxSpan, align: 'right' });
       }
-      
-      doc.font('Helvetica').fontSize(9);
-      doc.fillColor('#000').text(`Paid: Rs. ${paidAmount.toFixed(2)}`, margin + width / 2 + 5, 195);
-      doc.text(`Total: Rs. ${totalAmount.toFixed(2)}`, margin + width / 2 + 5, 205);
 
       // Horizontal line before table headers
       doc.moveTo(margin, 220).lineTo(margin + width, 220).stroke();
@@ -1315,7 +1652,7 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
       doc.text('Amount', colXs[5] + 5, yHeaders + 6, { width: colXs[6] - colXs[5] - 10, align: 'center' });
 
       // Draw all vertical lines for the table
-      const tableBottom = 590;
+      const tableBottom = 610;
       doc.moveTo(colXs[1], yHeaders).lineTo(colXs[1], tableBottom).stroke();
       doc.moveTo(colXs[2], yHeaders).lineTo(colXs[2], tableBottom).stroke();
       doc.moveTo(colXs[3], yHeaders).lineTo(colXs[3], tableBottom).stroke();
@@ -1325,34 +1662,35 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
       // Render Items
       doc.font('Helvetica').fontSize(9);
       let rowY = 245;
-      let grandTotal = 0;
+      let subTotal = 0;
       let totalGstAmount = 0;
 
       items.forEach((item, index) => {
-        const baseAmount = item.qty * item.rate;
-        const gstPct = item.gstPercent || 0;
+        const baseAmount = item.qty * (item.rate || item.price || 0);
+        const gstPct = item.gstPercent || item.gst_percent || 0;
         const gstAmt = baseAmount * (gstPct / 100);
         const lineTotal = baseAmount + gstAmt;
-        grandTotal += lineTotal;
+        subTotal += baseAmount;
         totalGstAmount += gstAmt;
 
         doc.text(`${index + 1}`, colXs[0] + 3, rowY, { width: colXs[1] - colXs[0] - 5, align: 'center' });
         doc.text(item.product, colXs[1] + 5, rowY, { width: colXs[2] - colXs[1] - 10 });
         doc.text(`${item.qty}`, colXs[2] + 5, rowY, { width: colXs[3] - colXs[2] - 10, align: 'center' });
-        doc.text(item.rate.toFixed(2), colXs[3] + 5, rowY, { width: colXs[4] - colXs[3] - 10, align: 'right' });
+        const itemRate = item.rate || item.price || 0;
+        doc.text(itemRate.toFixed(2), colXs[3] + 5, rowY, { width: colXs[4] - colXs[3] - 10, align: 'right' });
         doc.text(`${gstPct}%`, colXs[4] + 3, rowY, { width: colXs[5] - colXs[4] - 6, align: 'center' });
         doc.text(lineTotal.toFixed(2), colXs[5] + 5, rowY, { width: colXs[6] - colXs[5] - 10, align: 'right' });
 
         rowY += 15;
       });
 
-      // Total Row inside table
-      doc.moveTo(margin + 290, tableBottom).lineTo(margin + width, tableBottom).stroke();
-      doc.font('Helvetica-Bold');
-      doc.text('Total', colXs[4] + 3, tableBottom + 5, { width: colXs[5] - colXs[4] - 6, align: 'right' });
-      doc.text(grandTotal.toFixed(2), colXs[5] + 5, tableBottom + 5, { width: colXs[6] - colXs[5] - 10, align: 'right' });
+      // Total Amount row at bottom of items table
+      const totalRowY = 595;
+      doc.moveTo(margin, totalRowY).lineTo(margin + width, totalRowY).stroke();
+      doc.font('Helvetica-Bold').fontSize(9);
+      doc.text('Total Amount', colXs[1] + 5, totalRowY + 3);
+      doc.text(subTotal.toFixed(2), colXs[5] + 5, totalRowY + 3, { width: colXs[6] - colXs[5] - 10, align: 'right' });
 
-      // End of table section
       const afterTableY = 610;
       doc.moveTo(margin, afterTableY).lineTo(margin + width, afterTableY).stroke();
 
@@ -1364,7 +1702,7 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
       doc.font('Helvetica-Bold').fontSize(9).text('Terms & conditions', margin + 5, afterTableY + 5);
       doc.font('Helvetica').fontSize(8);
       doc.text('Goods once sold will not be taken back.', margin + 5, afterTableY + 18);
-      doc.text('All disputes are subject to Jodhpur jurisdiction.', margin + 5, afterTableY + 28);
+      doc.text("Subject to 'jodhpur' Jurisdiction only.", margin + 5, afterTableY + 28);
       doc.text('Please check goods at the time of delivery.', margin + 5, afterTableY + 38);
       doc.text('Interest @18% per annum will be charged on overdue.', margin + 5, afterTableY + 48);
 
@@ -1372,32 +1710,55 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
       doc.font('Helvetica-Bold').fontSize(9);
       const rightPadding = 5;
       const rightSpan = margin + width - midX - (rightPadding * 2);
-      
+
       const taxesY = afterTableY + 5;
       const halfGst = totalGstAmount / 2;
-      doc.text('Add : CGST', midX + rightPadding, taxesY);
-      doc.text(halfGst.toFixed(2), midX + rightPadding, taxesY, { width: rightSpan, align: 'right' });
-      doc.text('Add : SGST', midX + rightPadding, taxesY + 15);
-      doc.text(halfGst.toFixed(2), midX + rightPadding, taxesY + 15, { width: rightSpan, align: 'right' });
-      doc.text('Balance Received :', midX + rightPadding, taxesY + 30);
-      doc.text((paidAmount || 0).toFixed(2), midX + rightPadding, taxesY + 30, { width: rightSpan, align: 'right' });
-      doc.text('Balance Due :', midX + rightPadding, taxesY + 45);
-      doc.text((dueAmount || 0).toFixed(2), midX + rightPadding, taxesY + 45, { width: rightSpan, align: 'right' });
 
-      // Grand Total Box
+      // CGST and SGST at the top
+      doc.text('CGST', midX + rightPadding, taxesY);
+      doc.text(halfGst.toFixed(2), midX + rightPadding, taxesY, { width: rightSpan, align: 'right' });
+      doc.text('SGST', midX + rightPadding, taxesY + 11);
+      doc.text(halfGst.toFixed(2), midX + rightPadding, taxesY + 11, { width: rightSpan, align: 'right' });
+
+      // Line segment above Total Tax
+      doc.moveTo(margin + width - 60, taxesY + 21).lineTo(margin + width, taxesY + 21).stroke();
+
+      // Total Tax (CGST + SGST)
+      doc.text('Total Tax', midX + rightPadding, taxesY + 23);
+      doc.text(totalGstAmount.toFixed(2), midX + rightPadding, taxesY + 23, { width: rightSpan, align: 'right' });
+
+      // Balance Paid
+      doc.text('Balance Paid :', midX + rightPadding, taxesY + 37);
+      doc.text((paidAmount || 0).toFixed(2), midX + rightPadding, taxesY + 37, { width: rightSpan, align: 'right' });
+
+      // Discount (replaces Balance Due)
+      doc.text('Discount :', midX + rightPadding, taxesY + 48);
+      doc.text((discount || 0).toFixed(2), midX + rightPadding, taxesY + 48, { width: rightSpan, align: 'right' });
+
+      // Grand Total: Total Amount + Total Tax
+      const finalGrandTotal = subTotal + totalGstAmount;
       doc.rect(midX, 672, margin + width - midX, 18).fillAndStroke('#1a6b3c', '#000');
       doc.fillColor('#fff').text('Grand Total', midX + rightPadding, 677);
-      doc.text(totalAmount.toFixed(2), midX + rightPadding, 677, { width: rightSpan, align: 'right' });
+      doc.text(finalGrandTotal.toFixed(2), midX + rightPadding, 677, { width: rightSpan, align: 'right' });
 
       // Amount in Words Section
       doc.fillColor('#000');
       doc.moveTo(margin, 690).lineTo(margin + width, 690).stroke();
       doc.font('Helvetica-Bold').fontSize(9).text('Total Amount (₹ - In Words) :', margin + 5, 695);
-      doc.font('Helvetica').fontSize(9).text(numberToWords(Math.round(totalAmount)), margin + 145, 695);
+      doc.font('Helvetica').fontSize(9).text(numberToWords(Math.round(finalGrandTotal)), margin + 145, 695);
 
-      // Business Signatory Section
+      // Business Signatory Section & Remarks
       doc.moveTo(margin, 730).lineTo(margin + width, 730).stroke();
       doc.font('Helvetica-Bold').fontSize(10).text('For : ASPORTS ZONE', margin + 5, 740);
+
+      // Vertical line to separate signatory from Remarks on the right
+      doc.moveTo(midX, 730).lineTo(midX, bottomY).stroke();
+
+      if (showRemarks && remarks) {
+        doc.font('Helvetica-Bold').fontSize(8).text('REMARKS:', midX + 5, 740);
+        doc.font('Helvetica').fontSize(8).text(remarks, midX + 5, 750, { width: margin + width - midX - 10 });
+      }
+
       doc.font('Helvetica-Bold').fontSize(9).text('Authorised Signatory', margin + 5, bottomY - 15);
 
       stream.on('finish', () => resolve({ success: true, filePath }));
@@ -1414,41 +1775,41 @@ ipcMain.handle('generate-bill-pdf', async (event, data) => {
   return new Promise((resolve) => {
     try {
       const { imagePath, supplierName, invoiceNumber } = data;
-      
+
       // Read the image to determine its dimensions
       const sharp = (() => {
-        try { return require('sharp'); } catch(e) { return null; }
+        try { return require('sharp'); } catch (e) { return null; }
       })();
 
       const imageBuffer = fs.readFileSync(imagePath);
-      
+
       const sanitizedName = (supplierName || 'Bill').replace(/[<>:"/\\|?*]/g, '').trim();
       const invNo = (invoiceNumber || new Date().getTime()).toString().replace(/[<>:"/\\|?*]/g, '_').trim();
       const filename = `Bill_${invNo}_${sanitizedName}.pdf`;
       const billsPath = path.join(os.homedir(), 'Desktop', 'ASPORTS_BILLS');
-      
+
       const filePath = path.join(billsPath, filename);
-      
+
       // Ensure the directory for the file exists (handles subdirectories in filename)
       const fileDir = path.dirname(filePath);
       if (!fs.existsSync(fileDir)) {
         fs.mkdirSync(fileDir, { recursive: true });
       }
-      
+
       // Create PDF with the image embedded at full page (A4 by default)
       const doc = new PDFDocument({
         size: 'A4',
         margin: 0,
         bufferPages: true
       });
-      
+
       const stream = fs.createWriteStream(filePath);
       doc.pipe(stream);
-      
+
       // Embed the bill image to fill the entire page while maintaining aspect ratio
       const pageWidth = 595.28;
       const pageHeight = 841.89;
-      
+
       doc.image(imageBuffer, 0, 0, {
         width: pageWidth,
         height: pageHeight,
@@ -1456,7 +1817,7 @@ ipcMain.handle('generate-bill-pdf', async (event, data) => {
         align: 'center',
         valign: 'center'
       });
-      
+
       stream.on('finish', () => resolve({ success: true, filePath }));
       doc.end();
     } catch (error) {
@@ -1479,6 +1840,261 @@ app.commandLine.appendSwitch('in-process-gpu');
 app.commandLine.appendSwitch('disk-cache-dir', path.join(os.tmpdir(), 'asports-billing-cache'));
 app.commandLine.appendSwitch('disk-cache-size', '1');
 
+// ─── Shopify Admin API ──────────────────────────────────────
+
+// Helper: fetch with timeout + retry for Shopify API
+async function shopifyFetch(url, token, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+    try {
+      console.log(`[Shopify] Attempt ${attempt}/${retries} — ${url}`);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'X-Shopify-Access-Token': token,
+          'Content-Type': 'application/json'
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      return response;
+    } catch (err) {
+      clearTimeout(timeout);
+      console.error(`[Shopify] Attempt ${attempt} failed:`, err.message || err);
+
+      if (attempt === retries) {
+        // Final attempt failed — throw with helpful message
+        if (err.name === 'AbortError') {
+          throw new Error('Connection timed out — Shopify server did not respond within 15 seconds. Check your internet connection.');
+        }
+        if (err.message && err.message.includes('fetch failed')) {
+          throw new Error('Network error — Could not reach Shopify. Please check your internet connection and verify the store domain in .env is correct.');
+        }
+        if (err.code === 'ENOTFOUND') {
+          throw new Error(`DNS error — Could not resolve "${url}". Check if your store domain in .env is correct.`);
+        }
+        throw err;
+      }
+
+      // Wait before retrying (exponential backoff: 1s, 2s)
+      await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+    }
+  }
+}
+
+ipcMain.handle('shopify-search-products', async (event, { query, searchBy }) => {
+  try {
+    const domain = process.env.SHOPIFY_STORE_DOMAIN;
+    const token = process.env.SHOPIFY_ADMIN_API_TOKEN;
+    const version = process.env.SHOPIFY_API_VERSION || '2025-10';
+
+    console.log('[Shopify] Domain:', domain);
+    console.log('[Shopify] Token prefix:', token ? token.substring(0, 12) + '...' : 'MISSING');
+    console.log('[Shopify] API Version:', version);
+
+    if (!domain || !token) {
+      return { success: false, error: 'Shopify API credentials not configured. Check your .env file.' };
+    }
+
+    // Sanitize domain — strip protocol and trailing slashes if user added them
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const url = `https://${cleanDomain}/admin/api/${version}/products.json?limit=250`;
+    console.log('[Shopify] Request URL:', url);
+
+    const response = await shopifyFetch(url, token);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[Shopify API Error]', response.status, errText);
+
+      if (response.status === 401) {
+        return { success: false, error: '401 Unauthorized — Your Shopify Admin API token is invalid or expired. Generate a new token in Shopify Admin > Settings > Apps > Develop apps and update your .env file.' };
+      }
+      if (response.status === 403) {
+        return { success: false, error: '403 Forbidden — Your API token does not have the "read_products" scope. Update the app permissions in Shopify Admin.' };
+      }
+      if (response.status === 404) {
+        return { success: false, error: '404 Not Found — The store domain or API version is incorrect. Check SHOPIFY_STORE_DOMAIN and SHOPIFY_API_VERSION in your .env file.' };
+      }
+      if (response.status === 429) {
+        return { success: false, error: 'Rate limited by Shopify — Too many requests. Please wait a moment and try again.' };
+      }
+      return { success: false, error: `Shopify API error: ${response.status} ${response.statusText}. Response: ${errText.substring(0, 200)}` };
+    }
+
+    const data = await response.json();
+    let products = data.products || [];
+
+    // Apply search filter
+    if (query && query.trim()) {
+      const q = query.trim().toLowerCase();
+      products = products.filter(p => {
+        switch (searchBy) {
+          case 'sku':
+            return p.variants && p.variants.some(v => v.sku && v.sku.toLowerCase().includes(q));
+          case 'barcode':
+            return p.variants && p.variants.some(v => v.barcode && v.barcode.toLowerCase().includes(q));
+          case 'product_type':
+            return p.product_type && p.product_type.toLowerCase().includes(q);
+          case 'vendor':
+            return p.vendor && p.vendor.toLowerCase().includes(q);
+          case 'tag':
+            return p.tags && p.tags.toLowerCase().includes(q);
+          case 'title':
+          default:
+            return p.title && p.title.toLowerCase().includes(q);
+        }
+      });
+    }
+
+    // Map to clean response
+    const mapped = products.map(p => ({
+      id: p.id,
+      title: p.title,
+      body_html: p.body_html,
+      vendor: p.vendor,
+      product_type: p.product_type,
+      tags: p.tags,
+      status: p.status,
+      image: p.image ? p.image.src : null,
+      images: (p.images || []).map(img => img.src),
+      variants: (p.variants || []).map(v => ({
+        id: v.id,
+        title: v.title,
+        price: v.price,
+        compare_at_price: v.compare_at_price,
+        sku: v.sku,
+        barcode: v.barcode,
+        inventory_quantity: v.inventory_quantity,
+        weight: v.weight,
+        weight_unit: v.weight_unit
+      }))
+    }));
+
+    return { success: true, products: mapped };
+  } catch (error) {
+    console.error('[Shopify Search Error]', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('shopify-get-product', async (event, productId) => {
+  try {
+    const domain = process.env.SHOPIFY_STORE_DOMAIN;
+    const token = process.env.SHOPIFY_ADMIN_API_TOKEN;
+    const version = process.env.SHOPIFY_API_VERSION || '2025-10';
+
+    if (!domain || !token) {
+      return { success: false, error: 'Shopify API credentials not configured.' };
+    }
+
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const url = `https://${cleanDomain}/admin/api/${version}/products/${productId}.json`;
+    const response = await shopifyFetch(url, token);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[Shopify Product API Error]', response.status, errText);
+      return { success: false, error: `Shopify API error: ${response.status} — ${errText.substring(0, 200)}` };
+    }
+
+    const data = await response.json();
+    const p = data.product;
+
+    return {
+      success: true,
+      product: {
+        id: p.id,
+        title: p.title,
+        body_html: p.body_html,
+        vendor: p.vendor,
+        product_type: p.product_type,
+        tags: p.tags,
+        status: p.status,
+        created_at: p.created_at,
+        updated_at: p.updated_at,
+        image: p.image ? p.image.src : null,
+        images: (p.images || []).map(img => img.src),
+        variants: (p.variants || []).map(v => ({
+          id: v.id,
+          title: v.title,
+          price: v.price,
+          compare_at_price: v.compare_at_price,
+          sku: v.sku,
+          barcode: v.barcode,
+          inventory_quantity: v.inventory_quantity,
+          weight: v.weight,
+          weight_unit: v.weight_unit,
+          option1: v.option1,
+          option2: v.option2,
+          option3: v.option3
+        }))
+      }
+    };
+  } catch (error) {
+    console.error('[Shopify Product Error]', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get all supplier ledgers (grouped from purchase_bills)
+ipcMain.handle('get-supplier-ledgers', async () => {
+  try {
+    const bills = db.prepare('SELECT * FROM purchase_bills ORDER BY created_at ASC').all();
+    const allItems = db.prepare('SELECT * FROM purchase_items ORDER BY bill_id').all();
+
+    // Group items by bill_id for fast lookup
+    const itemsByBill = {};
+    for (const item of allItems) {
+      if (!itemsByBill[item.bill_id]) itemsByBill[item.bill_id] = [];
+      itemsByBill[item.bill_id].push(item);
+    }
+
+    // Group bills by supplier name (case-insensitive)
+    const supplierMap = {};
+    for (const bill of bills) {
+      const key = (bill.supplier_name || 'Unknown').trim().toLowerCase();
+      if (!supplierMap[key]) {
+        supplierMap[key] = {
+          supplierName: bill.supplier_name || 'Unknown',
+          phone: bill.phone_number || '',
+          email: bill.email || '',
+          address: bill.supplier_address || '',
+          bills: [],
+          totalAmount: 0,
+          totalPaid: 0,
+          totalDue: 0,
+          billCount: 0
+        };
+      }
+      // Update contact info from latest bill if available
+      if (bill.phone_number) supplierMap[key].phone = bill.phone_number;
+      if (bill.email) supplierMap[key].email = bill.email;
+      if (bill.supplier_address) supplierMap[key].address = bill.supplier_address;
+
+      supplierMap[key].bills.push({
+        ...bill,
+        items: itemsByBill[bill.id] || []
+      });
+      supplierMap[key].totalAmount += bill.total_amount || 0;
+      supplierMap[key].totalPaid += bill.paid_amount || 0;
+      supplierMap[key].totalDue += bill.due_amount || 0;
+      supplierMap[key].billCount += 1;
+    }
+
+    const suppliers = Object.values(supplierMap).sort((a, b) =>
+      a.supplierName.localeCompare(b.supplierName, 'en', { sensitivity: 'base' })
+    );
+
+    return { success: true, suppliers };
+  } catch (error) {
+    console.error('Error fetching supplier ledgers:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Ensure only one instance of the app runs at a time
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -1497,6 +2113,45 @@ if (!gotTheLock) {
   app.whenReady().then(() => {
     try {
       createWindow();
+
+      // ─── Auto-Updater Setup ─────────────────────────────
+      autoUpdater.autoDownload = true;
+      autoUpdater.autoInstallOnAppQuit = true;
+
+      autoUpdater.on('update-available', (info) => {
+        console.log('[ASPORTS] Update available:', info.version);
+        if (mainWindow) {
+          mainWindow.webContents.send('update-status', { status: 'downloading', version: info.version });
+        }
+      });
+
+      autoUpdater.on('update-downloaded', (info) => {
+        console.log('[ASPORTS] Update downloaded:', info.version);
+        if (mainWindow) {
+          mainWindow.webContents.send('update-status', { status: 'ready', version: info.version });
+        }
+        // Show a dialog and restart to apply the update
+        dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          title: 'Update Ready',
+          message: `Version ${info.version} has been downloaded.`,
+          detail: 'The app will restart now to apply the update.',
+          buttons: ['Restart Now'],
+          defaultId: 0
+        }).then(() => {
+          autoUpdater.quitAndInstall(false, true);
+        });
+      });
+
+      autoUpdater.on('error', (err) => {
+        console.error('[ASPORTS] Auto-update error:', err);
+      });
+
+      // Check for updates (silently, no error dialogs for offline users)
+      autoUpdater.checkForUpdates().catch((err) => {
+        console.log('[ASPORTS] Update check skipped (offline or no release):', err.message);
+      });
+
     } catch (err) {
       console.error('[ASPORTS] Failed to create window:', err);
       app.quit();

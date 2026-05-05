@@ -35,17 +35,18 @@ document.getElementById('btn-open-folder').addEventListener('click', async () =>
   }
 });
 
-function addRow(product = '', qty = '', rate = '', gstPercent = '0') {
+function addRow(product = '', qty = '', rate = '', gst = '0') {
   rowId++;
   const tbody = document.getElementById('bill-body');
   const tr = document.createElement('tr');
   tr.id = `row-${rowId}`;
+  tr.dataset.gstAmount = '0.00';
   tr.innerHTML = `
     <td class="row-num">${rowId}</td>
     <td><input type="text" class="table-input item-product" placeholder="Product name" value="${product}" spellcheck="false"></td>
     <td><input type="number" class="table-input table-input--num item-qty" placeholder="0" value="${qty}" min="1"></td>
     <td><input type="number" class="table-input table-input--num item-rate" placeholder="0.00" value="${rate}" step="0.01"></td>
-    <td><input type="number" class="table-input table-input--num item-gst" placeholder="0" value="${gstPercent}" min="0" max="100" step="0.01"></td>
+    <td><input type="number" class="table-input table-input--num item-gst" placeholder="0" value="${gst}" min="0" max="100" step="0.01"></td>
     <td class="row-total" style="text-align: right; font-weight: 600; font-family: 'Outfit', sans-serif; color: var(--text-primary); padding-right: 12px;">0.00</td>
     <td>
       <button class="btn-delete-row" onclick="deleteRow(${rowId})" title="Remove">
@@ -73,19 +74,25 @@ function recalcRow(tr) {
   const gstAmount = baseAmount * (gst / 100);
   const totalAmount = baseAmount + gstAmount;
   tr.querySelector('.row-total').textContent = totalAmount.toFixed(2);
+  tr.dataset.gstAmount = gstAmount.toFixed(2);
   recalculateTotals();
 }
 
 function recalculateTotals() {
   const rows = document.querySelectorAll('#bill-body tr');
   let grandTotal = 0;
+  let totalGst = 0;
   rows.forEach(row => {
     const totalCell = row.querySelector('.row-total');
     if (totalCell) {
       grandTotal += parseFloat(totalCell.textContent) || 0;
     }
   });
-  document.getElementById('total-amount').value = grandTotal.toFixed(2);
+  
+  const discount = parseFloat(document.getElementById('discount-amount').value) || 0;
+  const finalTotal = Math.max(0, grandTotal - discount);
+  
+  document.getElementById('total-amount').value = finalTotal.toFixed(2);
   recalcDue();
 }
 
@@ -96,8 +103,9 @@ function recalcDue() {
   document.getElementById('due-amount').value = due.toFixed(2);
 }
 
-// Auto-calculate due amount when paid or total changes
+// Auto-calculate due amount when paid, total or discount changes
 document.getElementById('paid-amount').addEventListener('input', recalcDue);
+document.getElementById('discount-amount').addEventListener('input', recalculateTotals);
 document.getElementById('total-amount').addEventListener('input', recalcDue);
 
 // Email auto-suffix logic
@@ -158,6 +166,7 @@ function collectFormData() {
   const supplierName = document.getElementById('supplier-name').value.trim();
   const invoiceNumber = document.getElementById('invoice-number').value.trim();
   const totalAmount = parseFloat(document.getElementById('total-amount').value);
+  const discount = parseFloat(document.getElementById('discount-amount').value) || 0;
   const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
   const dueAmount = parseFloat(document.getElementById('due-amount').value) || 0;
   const supplierAddress = document.getElementById('supplier-address').value.trim();
@@ -165,14 +174,16 @@ function collectFormData() {
   const email = document.getElementById('supplier-email').value.trim();
   const billDate = document.getElementById('bill-date').value;
   const dueDate = document.getElementById('due-date').value;
+  const remarks = document.getElementById('bill-remarks').value.trim();
+  const showRemarks = document.getElementById('show-remarks-pdf').checked;
 
-  if (!supplierName || !invoiceNumber || isNaN(totalAmount)) {
-    showToast('Please fill Supplier Name, Invoice Number & Total Amount', true);
+  if (!supplierName || !invoiceNumber || !phone || isNaN(totalAmount)) {
+    showToast('Please fill Supplier Name, Invoice Number, Contact Number & Total Amount', true);
     return null;
   }
 
-  if (phone && phone.length !== 10) {
-    showToast('Contact Number must be exactly 10 digits', true);
+  if (phone.length > 25) {
+    showToast('Contact Number cannot exceed 25 digits', true);
     return null;
   }
 
@@ -195,7 +206,7 @@ function collectFormData() {
     return null;
   }
 
-  return { supplierName, supplierAddress, phone, email, invoiceNumber, billDate, dueDate, totalAmount, paidAmount, dueAmount, items };
+  return { supplierName, supplierAddress, phone, email, invoiceNumber, billDate, dueDate, totalAmount, discount, paidAmount, dueAmount, remarks, showRemarks, items };
 }
 
 function clearForm() {
@@ -204,9 +215,12 @@ function clearForm() {
   document.getElementById('supplier-address').value = '';
   document.getElementById('supplier-phone').value = '';
   document.getElementById('supplier-email').value = '';
+  document.getElementById('bill-remarks').value = '';
+  document.getElementById('show-remarks-pdf').checked = true;
   document.getElementById('bill-date').value = today;
   document.getElementById('due-date').value = '';
   document.getElementById('total-amount').value = '';
+  document.getElementById('discount-amount').value = '0';
   document.getElementById('paid-amount').value = '0';
   document.getElementById('due-amount').value = '0';
   document.getElementById('bill-body').innerHTML = '';
@@ -591,6 +605,9 @@ document.getElementById('ocr-modal-apply').addEventListener('click', () => {
     });
     // Recalculate each row and totals
     document.querySelectorAll('#bill-body tr').forEach(tr => recalcRow(tr));
+  } else {
+    // If no items, still recalculate to reset GST displays
+    recalculateTotals();
   }
 
   recalcDue();

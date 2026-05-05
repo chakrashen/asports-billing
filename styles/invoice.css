@@ -33,7 +33,7 @@
 
 .customer-form__row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
@@ -180,6 +180,7 @@
 /* ─── Items Section ──────────────────────────────────────── */
 .items-section {
   animation: fade-in-up 0.5s var(--ease-out) 0.1s both;
+  overflow: visible !important;
 }
 
 /* ─── Add Button ─────────────────────────────────────────── */
@@ -228,7 +229,9 @@
 
 /* ─── Table ──────────────────────────────────────────────── */
 .table-wrapper {
-  overflow-x: auto;
+  position: relative;
+  z-index: 10;
+  overflow: visible;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
 }
@@ -273,11 +276,17 @@
   border-bottom: none;
 }
 
+.invoice-table tbody tr:focus-within {
+  position: relative;
+  z-index: 1001;
+}
+
 /* Column widths */
 .th-num { width: 50px; text-align: center; }
 .th-product { width: auto; }
-.th-qty { width: 120px; }
-.th-price { width: 140px; }
+.th-qty { width: 100px; }
+.th-price { width: 120px; }
+.th-gst { width: 100px; }
 .th-total { width: 140px; }
 .th-action { width: 50px; }
 
@@ -299,6 +308,77 @@
   border-color: var(--accent-cyan);
   box-shadow: 0 0 0 2px var(--accent-cyan-dim);
 }
+
+/* ─── Product Suggestions ────────────────────────────────── */
+.product-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  max-height: 250px;
+  background: #1a1c3d;
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  z-index: 9999;
+  overflow-y: auto;
+  margin-top: 4px;
+  display: none;
+}
+
+.product-suggestions::-webkit-scrollbar {
+  width: 6px;
+}
+.product-suggestions::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.suggestion-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-item:hover, .suggestion-item.active {
+  background: var(--accent-cyan-dim);
+}
+
+.suggestion-item__title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.suggestion-item__meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+.suggestion-item__price {
+  color: var(--accent-emerald);
+  font-weight: 700;
+}
+
+.input-wrapper {
+  position: relative;
+  z-index: 1;
+}
+
+.input-wrapper:focus-within {
+  z-index: 1000;
+}
+
 
 .table-input::placeholder {
   color: var(--text-muted);
@@ -369,6 +449,8 @@
 
 /* ─── Totals Bar ─────────────────────────────────────────── */
 .totals-bar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -432,18 +514,83 @@
   font-weight: 600;
 }
 
+.payment-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .payment-input {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-sm);
-  padding: 6px 12px;
+  padding: 6px 36px 6px 12px;
   color: var(--text-primary);
   font-family: 'Inter', sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
-  width: 130px;
+  width: 150px;
   transition: all 0.2s ease;
   outline: none;
+}
+
+.btn-input-icon {
+  position: absolute;
+  right: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  z-index: 2;
+}
+
+.btn-input-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent-cyan);
+}
+
+.due-badge {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--accent-cyan);
+  color: #000;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: none;
+  z-index: 100;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 229, 255, 0.3);
+  white-space: nowrap;
+  animation: fade-in-up 0.2s var(--ease-out);
+}
+
+.due-badge.show {
+  display: block;
+}
+
+.due-badge::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  right: 10px;
+  border: 6px solid transparent;
+  border-bottom-color: var(--accent-cyan);
+}
+
+.due-badge:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 229, 255, 0.5);
 }
 
 .payment-input:focus {

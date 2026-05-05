@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bill History — ASPORTS ZONE</title>
   <link rel="stylesheet" href="../styles/global.css">
   <link rel="stylesheet" href="../styles/history.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   <style>
     .tab-bar {
@@ -16,6 +19,7 @@
       border-bottom: 1px solid var(--border-subtle);
       padding-bottom: 2px;
     }
+
     .tab-btn {
       background: none;
       border: none;
@@ -28,12 +32,15 @@
       position: relative;
       transition: all 0.2s ease;
     }
+
     .tab-btn:hover {
       color: var(--text-primary);
     }
+
     .tab-btn.active {
       color: var(--accent-emerald);
     }
+
     .tab-btn.active::after {
       content: '';
       position: absolute;
@@ -44,6 +51,7 @@
       background: var(--accent-emerald);
       border-radius: 2px;
     }
+
     .btn-view-detail {
       display: inline-flex;
       align-items: center;
@@ -59,6 +67,7 @@
       transition: all 0.2s ease;
       font-family: 'Inter', sans-serif;
     }
+
     .btn-view-detail:hover {
       background: rgba(0, 229, 255, 0.15);
       transform: translateY(-1px);
@@ -76,13 +85,21 @@
       flex-direction: column;
       animation: fadeIn 0.2s ease;
     }
+
     .pdf-modal-overlay.show {
       display: flex;
     }
+
     @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
     }
+
     .pdf-modal-header {
       display: flex;
       align-items: center;
@@ -91,6 +108,7 @@
       background: rgba(10, 10, 26, 0.95);
       border-bottom: 1px solid var(--border-subtle);
     }
+
     .pdf-modal-header h3 {
       color: var(--text-primary);
       font-family: 'Outfit', sans-serif;
@@ -100,10 +118,12 @@
       align-items: center;
       gap: 10px;
     }
+
     .pdf-modal-header h3 .material-icons-round {
       color: var(--accent-emerald);
       font-size: 22px;
     }
+
     .pdf-modal-body {
       flex: 1;
       display: flex;
@@ -112,6 +132,7 @@
       padding: 20px;
       overflow: hidden;
     }
+
     .pdf-modal-body embed,
     .pdf-modal-body iframe {
       width: 100%;
@@ -119,6 +140,7 @@
       border: none;
       border-radius: 8px;
     }
+
     .pdf-loading {
       display: flex;
       flex-direction: column;
@@ -126,6 +148,7 @@
       gap: 16px;
       color: var(--text-muted);
     }
+
     .pdf-loading .spinner {
       width: 40px;
       height: 40px;
@@ -134,9 +157,13 @@
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
+
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
+
     .pdf-modal-footer {
       display: flex;
       align-items: center;
@@ -145,16 +172,19 @@
       background: rgba(10, 10, 26, 0.95);
       border-top: 1px solid var(--border-subtle);
     }
+
     .pdf-modal-footer-left {
       display: flex;
       align-items: center;
       gap: 14px;
     }
+
     .pdf-modal-footer-right {
       display: flex;
       align-items: center;
       gap: 10px;
     }
+
     .due-badge {
       display: inline-flex;
       align-items: center;
@@ -168,9 +198,11 @@
       font-size: 0.95rem;
       color: var(--accent-rose);
     }
+
     .due-badge .material-icons-round {
       font-size: 18px;
     }
+
     .btn-all-paid {
       display: inline-flex;
       align-items: center;
@@ -186,36 +218,165 @@
       transition: all 0.2s ease;
       font-family: 'Inter', sans-serif;
     }
+
     .btn-all-paid:hover {
       background: rgba(16, 185, 129, 0.22);
       transform: translateY(-1px);
       box-shadow: 0 4px 15px rgba(16, 185, 129, 0.15);
     }
-    .btn-all-paid:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
+
+    .btn-pdf-download:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-1px);
     }
+
+    /* ─── Remark Popover ─── */
+    .remark-popover {
+      position: absolute;
+      bottom: 80px;
+      right: 24px;
+      width: 320px;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      z-index: 1001;
+      display: none;
+      animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .remark-popover.show {
+      display: block;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(10px) scale(0.98);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+    }
+
+    .remark-popover__header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .remark-popover__header span {
+      font-size: 18px;
+      color: var(--accent-emerald);
+    }
+
+    .remark-popover__header h4 {
+      margin: 0;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .remark-popover__content {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .remark-popover__content:empty::after {
+      content: 'No remarks saved for this bill.';
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
+    .remark-popover__close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .remark-popover__close:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--accent-rose);
+    }
+
     .btn-pdf-download {
       display: inline-flex;
       align-items: center;
       gap: 6px;
       padding: 8px 18px;
       border-radius: 8px;
-      border: 1px solid rgba(0, 229, 255, 0.25);
-      background: rgba(0, 229, 255, 0.08);
-      color: #00e5ff;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
       font-size: 0.85rem;
       font-weight: 700;
       cursor: pointer;
       transition: all 0.2s ease;
       font-family: 'Inter', sans-serif;
     }
+
     .btn-pdf-download:hover {
-      background: rgba(0, 229, 255, 0.15);
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
       transform: translateY(-1px);
     }
+
+    .btn-pdf-action--remark {
+      border-color: rgba(16, 185, 129, 0.25);
+      background: rgba(16, 185, 129, 0.08);
+      color: var(--accent-emerald);
+    }
+
+    .btn-pdf-action--remark:hover {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-pdf-action--edit {
+      border-color: rgba(0, 229, 255, 0.25);
+      background: rgba(0, 229, 255, 0.08);
+      color: #00e5ff;
+    }
+
+    .btn-pdf-action--edit:hover {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: rgba(0, 229, 255, 0.4);
+    }
+
+    .btn-pdf-action--delete {
+      border-color: rgba(244, 63, 94, 0.25);
+      background: rgba(244, 63, 94, 0.08);
+      color: var(--accent-rose);
+    }
+
+    .btn-pdf-action--delete:hover {
+      background: rgba(244, 63, 94, 0.15);
+      border-color: rgba(244, 63, 94, 0.4);
+    }
+
     .btn-pdf-close {
       display: inline-flex;
       align-items: center;
@@ -231,8 +392,28 @@
       transition: all 0.2s ease;
       font-family: 'Inter', sans-serif;
     }
+
     .btn-pdf-close:hover {
       background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    .btn-pdf-back {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      margin-right: 12px;
+      border-radius: 50%;
+      transition: all 0.2s ease;
+    }
+
+    .btn-pdf-back:hover {
+      background: rgba(255, 255, 255, 0.08);
       color: var(--text-primary);
     }
 
@@ -241,6 +422,7 @@
       #duedate-split-layout {
         flex-direction: column;
       }
+
       .calendar-container {
         flex: 1 !important;
       }
@@ -252,6 +434,7 @@
       grid-template-columns: repeat(7, 1fr);
       gap: 8px;
     }
+
     .calendar-day-label {
       text-align: center;
       font-size: 0.65rem;
@@ -261,6 +444,7 @@
       letter-spacing: 0.05em;
       padding-bottom: 8px;
     }
+
     .calendar-date {
       aspect-ratio: 1;
       display: flex;
@@ -278,20 +462,24 @@
       position: relative;
       transition: all 0.2s ease;
     }
+
     .calendar-date:hover:not(.empty) {
       background: rgba(255, 255, 255, 0.06);
       border-color: var(--border-subtle);
       transform: scale(1.05);
     }
+
     .calendar-date.empty {
       background: transparent;
       cursor: default;
     }
+
     .calendar-date.today {
       background: rgba(0, 229, 255, 0.1);
       border-color: rgba(0, 229, 255, 0.3);
       color: var(--accent-cyan);
     }
+
     .calendar-date.has-due::after {
       content: '';
       position: absolute;
@@ -300,10 +488,22 @@
       height: 4px;
       border-radius: 50%;
     }
-    .calendar-date.has-due.overdue::after { background: var(--accent-rose); box-shadow: 0 0 8px var(--accent-rose); }
-    .calendar-date.has-due.today-due::after { background: var(--accent-orange); box-shadow: 0 0 8px var(--accent-orange); }
-    .calendar-date.has-due.upcoming-due::after { background: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald); }
-    
+
+    .calendar-date.has-due.overdue::after {
+      background: var(--accent-rose);
+      box-shadow: 0 0 8px var(--accent-rose);
+    }
+
+    .calendar-date.has-due.today-due::after {
+      background: var(--accent-orange);
+      box-shadow: 0 0 8px var(--accent-orange);
+    }
+
+    .calendar-date.has-due.upcoming-due::after {
+      background: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+    }
+
     .calendar-date.selected {
       background: rgba(255, 255, 255, 0.1);
       border-color: var(--text-primary);
@@ -321,17 +521,51 @@
       transition: all 0.2s ease;
       cursor: pointer;
     }
+
     .due-item-mini:hover {
       background: rgba(255, 255, 255, 0.06);
       border-color: rgba(255, 255, 255, 0.1);
       transform: translateX(4px);
     }
-    .due-item-mini__info { flex: 1; min-width: 0; }
-    .due-item-mini__supplier { font-weight: 700; color: var(--text-primary); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .due-item-mini__invoice { font-size: 0.72rem; color: var(--accent-orange); font-family: 'Outfit', sans-serif; margin-top: 2px; }
-    .due-item-mini__amount { text-align: right; }
-    .due-item-mini__total { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.9rem; color: var(--text-primary); }
-    .due-item-mini__due { font-size: 0.75rem; color: var(--accent-rose); font-weight: 700; margin-top: 1px; }
+
+    .due-item-mini__info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .due-item-mini__supplier {
+      font-weight: 700;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .due-item-mini__invoice {
+      font-size: 0.72rem;
+      color: var(--accent-orange);
+      font-family: 'Outfit', sans-serif;
+      margin-top: 2px;
+    }
+
+    .due-item-mini__amount {
+      text-align: right;
+    }
+
+    .due-item-mini__total {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--text-primary);
+    }
+
+    .due-item-mini__due {
+      font-size: 0.75rem;
+      color: var(--accent-rose);
+      font-weight: 700;
+      margin-top: 1px;
+    }
 
     .due-group-header {
       display: flex;
@@ -347,24 +581,45 @@
       border-bottom: 1px solid var(--border-subtle);
       margin-top: 20px;
     }
-    .due-group-header:first-child { margin-top: 0; }
-    .due-group-header .material-icons-round { font-size: 16px; }
-    .due-group-header.overdue { color: var(--accent-rose); }
-    .due-group-header.today { color: var(--accent-orange); }
-    .due-group-header.upcoming { color: var(--accent-emerald); }
-    .due-group-header.nodate { color: var(--text-muted); }
+
+    .due-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .due-group-header .material-icons-round {
+      font-size: 16px;
+    }
+
+    .due-group-header.overdue {
+      color: var(--accent-rose);
+    }
+
+    .due-group-header.today {
+      color: var(--accent-orange);
+    }
+
+    .due-group-header.upcoming {
+      color: var(--accent-emerald);
+    }
+
+    .due-group-header.nodate {
+      color: var(--text-muted);
+    }
 
     .due-bill-card {
       display: flex;
       align-items: center;
       gap: 16px;
       padding: 16px 20px;
-      background: rgba(255,255,255,0.02);
-      border-bottom: 1px solid rgba(255,255,255,0.03);
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
       transition: background 0.15s ease;
       cursor: pointer;
     }
-    .due-bill-card:hover { background: rgba(255,255,255,0.04); }
+
+    .due-bill-card:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
 
     .due-bill-card__date-box {
       min-width: 60px;
@@ -374,31 +629,111 @@
       font-family: 'Outfit', sans-serif;
       font-weight: 800;
     }
-    .due-bill-card__date-box .day { font-size: 1.5rem; line-height: 1; }
-    .due-bill-card__date-box .month { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
-    .due-bill-card__date-box.overdue { background: rgba(244,63,94,0.12); color: var(--accent-rose); border: 1px solid rgba(244,63,94,0.2); }
-    .due-bill-card__date-box.today { background: rgba(251,146,60,0.12); color: var(--accent-orange); border: 1px solid rgba(251,146,60,0.2); }
-    .due-bill-card__date-box.upcoming { background: rgba(16,185,129,0.10); color: var(--accent-emerald); border: 1px solid rgba(16,185,129,0.18); }
-    .due-bill-card__date-box.nodate { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.08); }
 
-    .due-bill-card__info { flex: 1; min-width: 0; }
-    .due-bill-card__supplier { font-weight: 700; color: var(--text-primary); font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .due-bill-card__invoice { font-size: 0.78rem; color: var(--accent-orange); font-family:'Outfit',sans-serif; font-weight:600; margin-top:3px; }
-    .due-bill-card__urgency { font-size: 0.72rem; margin-top: 4px; font-weight: 600; }
-    .due-bill-card__urgency.overdue { color: var(--accent-rose); }
-    .due-bill-card__urgency.today { color: var(--accent-orange); }
-    .due-bill-card__urgency.upcoming { color: var(--accent-emerald); }
-    .due-bill-card__urgency.nodate { color: var(--text-muted); }
+    .due-bill-card__date-box .day {
+      font-size: 1.5rem;
+      line-height: 1;
+    }
 
-    .due-bill-card__amount { text-align: right; }
-    .due-bill-card__amount .total { font-family:'Outfit',sans-serif; font-weight:700; font-size:1rem; color:var(--text-primary); }
-    .due-bill-card__amount .due { font-size:0.78rem; color:var(--accent-rose); font-weight:700; margin-top:2px; }
+    .due-bill-card__date-box .month {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 2px;
+    }
+
+    .due-bill-card__date-box.overdue {
+      background: rgba(244, 63, 94, 0.12);
+      color: var(--accent-rose);
+      border: 1px solid rgba(244, 63, 94, 0.2);
+    }
+
+    .due-bill-card__date-box.today {
+      background: rgba(251, 146, 60, 0.12);
+      color: var(--accent-orange);
+      border: 1px solid rgba(251, 146, 60, 0.2);
+    }
+
+    .due-bill-card__date-box.upcoming {
+      background: rgba(16, 185, 129, 0.10);
+      color: var(--accent-emerald);
+      border: 1px solid rgba(16, 185, 129, 0.18);
+    }
+
+    .due-bill-card__date-box.nodate {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .due-bill-card__info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .due-bill-card__supplier {
+      font-weight: 700;
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .due-bill-card__invoice {
+      font-size: 0.78rem;
+      color: var(--accent-orange);
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
+    .due-bill-card__urgency {
+      font-size: 0.72rem;
+      margin-top: 4px;
+      font-weight: 600;
+    }
+
+    .due-bill-card__urgency.overdue {
+      color: var(--accent-rose);
+    }
+
+    .due-bill-card__urgency.today {
+      color: var(--accent-orange);
+    }
+
+    .due-bill-card__urgency.upcoming {
+      color: var(--accent-emerald);
+    }
+
+    .due-bill-card__urgency.nodate {
+      color: var(--text-muted);
+    }
+
+    .due-bill-card__amount {
+      text-align: right;
+    }
+
+    .due-bill-card__amount .total {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--text-primary);
+    }
+
+    .due-bill-card__amount .due {
+      font-size: 0.78rem;
+      color: var(--accent-rose);
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
     .due-bill-card__amount .paid-btn {
       margin-top: 8px;
       padding: 5px 14px;
       border-radius: 7px;
-      border: 1px solid rgba(16,185,129,0.3);
-      background: rgba(16,185,129,0.08);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.08);
       color: var(--accent-emerald);
       font-size: 0.72rem;
       font-weight: 700;
@@ -409,25 +744,43 @@
       gap: 5px;
       transition: all 0.2s ease;
     }
-    .due-bill-card__amount .paid-btn:hover { background: rgba(16,185,129,0.18); transform: translateY(-1px); }
+
+    .due-bill-card__amount .paid-btn:hover {
+      background: rgba(16, 185, 129, 0.18);
+      transform: translateY(-1px);
+    }
 
     /* ─── Notification Banner ─── */
     #notif-banner {
       display: none;
       align-items: flex-start;
       gap: 14px;
-      background: linear-gradient(135deg, rgba(244,63,94,0.12), rgba(251,146,60,0.08));
-      border: 1px solid rgba(244,63,94,0.25);
+      background: linear-gradient(135deg, rgba(244, 63, 94, 0.12), rgba(251, 146, 60, 0.08));
+      border: 1px solid rgba(244, 63, 94, 0.25);
       border-radius: 14px;
       padding: 16px 20px;
       margin-bottom: 20px;
       animation: pulse-border 2s ease-in-out infinite;
     }
-    #notif-banner.show { display: flex; }
-    @keyframes pulse-border {
-      0%,100% { border-color: rgba(244,63,94,0.25); box-shadow: none; }
-      50% { border-color: rgba(244,63,94,0.55); box-shadow: 0 0 20px rgba(244,63,94,0.12); }
+
+    #notif-banner.show {
+      display: flex;
     }
+
+    @keyframes pulse-border {
+
+      0%,
+      100% {
+        border-color: rgba(244, 63, 94, 0.25);
+        box-shadow: none;
+      }
+
+      50% {
+        border-color: rgba(244, 63, 94, 0.55);
+        box-shadow: 0 0 20px rgba(244, 63, 94, 0.12);
+      }
+    }
+
     #notif-banner .notif-icon {
       font-size: 28px;
       color: var(--accent-rose);
@@ -435,42 +788,1196 @@
       margin-top: 2px;
       animation: bell-shake 2.5s ease-in-out infinite;
     }
+
     @keyframes bell-shake {
-      0%,90%,100% { transform: rotate(0); }
-      92% { transform: rotate(-12deg); }
-      94% { transform: rotate(12deg); }
-      96% { transform: rotate(-8deg); }
-      98% { transform: rotate(8deg); }
+
+      0%,
+      90%,
+      100% {
+        transform: rotate(0);
+      }
+
+      92% {
+        transform: rotate(-12deg);
+      }
+
+      94% {
+        transform: rotate(12deg);
+      }
+
+      96% {
+        transform: rotate(-8deg);
+      }
+
+      98% {
+        transform: rotate(8deg);
+      }
     }
-    #notif-banner .notif-body { flex:1; }
-    #notif-banner .notif-title { font-weight: 800; font-family:'Outfit',sans-serif; font-size:1rem; color:var(--text-primary); }
-    #notif-banner .notif-items { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+    #notif-banner .notif-body {
+      flex: 1;
+    }
+
+    #notif-banner .notif-title {
+      font-weight: 800;
+      font-family: 'Outfit', sans-serif;
+      font-size: 1rem;
+      color: var(--text-primary);
+    }
+
+    #notif-banner .notif-items {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
     #notif-banner .notif-chip {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
       font-family: 'Inter', sans-serif;
     }
-    #notif-banner .notif-chip.overdue { background: rgba(244,63,94,0.15); color: var(--accent-rose); border: 1px solid rgba(244,63,94,0.3); }
-    #notif-banner .notif-chip.today { background: rgba(251,146,60,0.15); color: var(--accent-orange); border: 1px solid rgba(251,146,60,0.3); }
+
+    #notif-banner .notif-chip.overdue {
+      background: rgba(244, 63, 94, 0.15);
+      color: var(--accent-rose);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+    }
+
+    #notif-banner .notif-chip.today {
+      background: rgba(251, 146, 60, 0.15);
+      color: var(--accent-orange);
+      border: 1px solid rgba(251, 146, 60, 0.3);
+    }
+
     #notif-banner .notif-dismiss {
       align-self: flex-start;
-      background: none; border: none; cursor: pointer;
-      color: var(--text-muted); font-size: 20px;
-      transition: color 0.2s ease; padding: 2px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 20px;
+      transition: color 0.2s ease;
+      padding: 2px;
     }
-    #notif-banner .notif-dismiss:hover { color: var(--text-primary); }
+
+    #notif-banner .notif-dismiss:hover {
+      color: var(--text-primary);
+    }
+
+    /* ─── Edit Modal Styles ─── */
+    .edit-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.92);
+      backdrop-filter: blur(12px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .edit-modal-overlay.show {
+      display: flex;
+    }
+
+    .edit-modal {
+      width: 90%;
+      max-width: 900px;
+      max-height: 90vh;
+      background: rgba(15, 15, 35, 0.98);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+    }
+
+    .edit-modal__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .edit-modal__header h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+    }
+
+    .edit-modal__header h3 .material-icons-round {
+      color: var(--accent-cyan);
+      font-size: 22px;
+    }
+
+    .edit-modal__body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .edit-modal__section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .edit-modal__section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .edit-modal__section-title .material-icons-round {
+      font-size: 16px;
+    }
+
+    .edit-modal__grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .edit-modal__field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .edit-modal__field.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .edit-modal__label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .edit-modal__input {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    .edit-modal__input:focus {
+      border-color: rgba(0, 229, 255, 0.4);
+      background: rgba(0, 229, 255, 0.04);
+      box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.08);
+    }
+
+    .edit-modal__input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.5;
+    }
+
+    textarea.edit-modal__input {
+      resize: none;
+      min-height: 56px;
+    }
+
+    .edit-modal__input--readonly {
+      cursor: not-allowed;
+      opacity: 0.7;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .edit-modal__items-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .edit-modal__items-table th {
+      padding: 10px 12px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid var(--border-subtle);
+      text-align: left;
+    }
+
+    .edit-modal__items-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .edit-modal__items-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .edit-modal__items-table .edit-item-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      padding: 7px 10px;
+      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.82rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .edit-modal__items-table .edit-item-input:focus {
+      border-color: rgba(0, 229, 255, 0.3);
+      background: rgba(0, 229, 255, 0.04);
+    }
+
+    .edit-modal__items-table .edit-item-input--num {
+      text-align: right;
+      width: 70px;
+    }
+
+    .edit-modal__items-table .edit-item-input--product {
+      min-width: 160px;
+    }
+
+    .btn-edit-add-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px dashed rgba(0, 229, 255, 0.3);
+      background: transparent;
+      color: var(--accent-cyan);
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .btn-edit-add-item:hover {
+      background: rgba(0, 229, 255, 0.06);
+      border-color: rgba(0, 229, 255, 0.5);
+    }
+
+    .btn-edit-delete-item {
+      background: none;
+      border: none;
+      color: var(--accent-rose);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .btn-edit-delete-item:hover {
+      background: rgba(244, 63, 94, 0.15);
+    }
+
+    .edit-modal__footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 28px;
+      border-top: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .btn-edit-save {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      border-radius: 10px;
+      border: none;
+      background: var(--gradient-emerald);
+      color: #fff;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-edit-save:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-edit-cancel {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s ease;
+    }
+
+    .btn-edit-cancel:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    .edit-row-total {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+      text-align: right;
+      padding-right: 8px;
+      min-width: 80px;
+    }
 
     /* ─── Responsive ─────────────────────────────────────────── */
     @media (max-width: 1000px) {
       #duedate-split-layout {
         flex-direction: column;
       }
+
       .calendar-container {
         flex: 1 !important;
       }
+
+      .edit-modal {
+        width: 95%;
+        max-height: 95vh;
+      }
+
+      .edit-modal__grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Toggle Switch Styles */
+    .switch-container {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 18px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.1);
+      transition: .3s;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 12px;
+      width: 12px;
+      left: 3px;
+      bottom: 2px;
+      background-color: var(--text-muted);
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked+.slider {
+      background-color: rgba(0, 229, 255, 0.2);
+      border-color: rgba(0, 229, 255, 0.3);
+    }
+
+    input:checked+.slider:before {
+      transform: translateX(16px);
+      background-color: #00e5ff;
+    }
+
+    /* ─── Change Log Panel ─── */
+    .changelog-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.88);
+      backdrop-filter: blur(12px);
+      z-index: 3000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .changelog-overlay.show {
+      display: flex;
+    }
+
+    .changelog-panel {
+      width: 94%;
+      max-width: 1100px;
+      max-height: 85vh;
+      background: rgba(15, 15, 35, 0.98);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+      animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .changelog-panel__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .changelog-panel__header h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+    }
+
+    .changelog-panel__header h3 .material-icons-round {
+      color: #fb923c;
+      font-size: 22px;
+    }
+
+    .changelog-panel__body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+    }
+
+    .changelog-panel__body::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    .changelog-panel__body::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+
+    .changelog-group {
+      margin-bottom: 24px;
+      position: relative;
+      padding-left: 24px;
+    }
+
+    .changelog-group::before {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 28px;
+      bottom: 0;
+      width: 2px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 2px;
+    }
+
+    .changelog-group:last-child::before {
+      display: none;
+    }
+
+    .changelog-group__dot {
+      position: absolute;
+      left: 2px;
+      top: 6px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #fb923c;
+      border: 2px solid rgba(15, 15, 35, 0.98);
+      box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.2);
+    }
+
+    .changelog-group__date {
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #fb923c;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .changelog-group__date .material-icons-round {
+      font-size: 15px;
+    }
+
+    .changelog-entry {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      transition: background 0.15s ease;
+    }
+
+    .changelog-entry:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .changelog-entry__field {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .changelog-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .changelog-split__side {
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .changelog-split__side--old {
+      background: rgba(244, 63, 94, 0.04);
+      border-right: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .changelog-split__side--new {
+      background: rgba(16, 185, 129, 0.04);
+    }
+
+    .changelog-split__label {
+      font-size: 0.65rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .changelog-split__label--old {
+      color: var(--accent-rose);
+    }
+
+    .changelog-split__label--new {
+      color: var(--accent-emerald);
+    }
+
+    .changelog-split__value {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+      word-break: break-word;
+      line-height: 1.5;
+    }
+
+    .changelog-split__value--old {
+      text-decoration: line-through;
+      text-decoration-color: rgba(244, 63, 94, 0.35);
+      color: rgba(255, 255, 255, 0.55);
+    }
+
+    .changelog-split__item {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .changelog-split__item:last-child {
+      border-bottom: none;
+    }
+
+    .changelog-empty {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-muted);
+    }
+
+    .changelog-empty .material-icons-round {
+      font-size: 52px;
+      display: block;
+      margin-bottom: 14px;
+      opacity: 0.4;
+    }
+
+    .changelog-empty p {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .changelog-empty small {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 6px;
+      display: block;
+    }
+
+    .btn-pdf-action--changelog {
+      border-color: rgba(251, 146, 60, 0.25);
+      background: rgba(251, 146, 60, 0.08);
+      color: #fb923c;
+    }
+
+    .btn-pdf-action--changelog:hover {
+      background: rgba(251, 146, 60, 0.15);
+      border-color: rgba(251, 146, 60, 0.4);
+    }
+
+    /* ─── Password Modal ─── */
+    .password-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.9);
+      backdrop-filter: blur(14px);
+      z-index: 4000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .password-overlay.show {
+      display: flex;
+    }
+
+    .password-modal {
+      width: 380px;
+      background: rgba(15, 15, 35, 0.98);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+      animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      text-align: center;
+    }
+
+    .password-modal__icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: rgba(0, 229, 255, 0.08);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 18px;
+    }
+
+    .password-modal__icon .material-icons-round {
+      font-size: 28px;
+      color: #00e5ff;
+    }
+
+    .password-modal__title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0 0 6px;
+    }
+
+    .password-modal__sub {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin: 0 0 20px;
+    }
+
+    .password-modal__input-wrap {
+      position: relative;
+      margin-bottom: 8px;
+    }
+
+    .password-modal__input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px 44px 12px 16px;
+      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 500;
+      outline: none;
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+      letter-spacing: 2px;
+    }
+
+    .password-modal__input:focus {
+      border-color: rgba(0, 229, 255, 0.4);
+      background: rgba(0, 229, 255, 0.04);
+      box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.08);
+    }
+
+    .password-modal__input.error {
+      border-color: rgba(244, 63, 94, 0.5);
+      background: rgba(244, 63, 94, 0.04);
+      box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.08);
+      animation: headShake 0.4s ease;
+    }
+
+    @keyframes headShake {
+
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      15% {
+        transform: translateX(-6px);
+      }
+
+      30% {
+        transform: translateX(5px);
+      }
+
+      45% {
+        transform: translateX(-4px);
+      }
+
+      60% {
+        transform: translateX(3px);
+      }
+
+      75% {
+        transform: translateX(-2px);
+      }
+    }
+
+    .password-modal__toggle {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .password-modal__toggle:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-primary);
+    }
+
+    .password-modal__error {
+      font-size: 0.75rem;
+      color: var(--accent-rose);
+      font-weight: 600;
+      min-height: 18px;
+      margin-bottom: 14px;
+    }
+
+    .password-modal__actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .password-modal__actions .btn-pw-cancel {
+      flex: 1;
+      padding: 11px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s ease;
+    }
+
+    .password-modal__actions .btn-pw-cancel:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    .password-modal__actions .btn-pw-submit {
+      flex: 1;
+      padding: 11px 16px;
+      border-radius: 10px;
+      border: none;
+      background: var(--gradient-emerald);
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
+    }
+
+    .password-modal__actions .btn-pw-submit:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.35);
+    }
+
+    .password-modal__forgot {
+      display: block;
+      margin-top: 12px;
+      font-size: 0.78rem;
+      color: #00e5ff;
+      text-decoration: none;
+      cursor: pointer;
+      font-weight: 600;
+      opacity: 0.8;
+      transition: opacity 0.15s ease;
+    }
+
+    .password-modal__forgot:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+
+    /* ─── Forgot Password Modal ─── */
+    .forgot-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.92);
+      backdrop-filter: blur(16px);
+      z-index: 5000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .forgot-overlay.show {
+      display: flex;
+    }
+
+    .forgot-modal {
+      width: 420px;
+      background: rgba(15, 15, 35, 0.98);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+      animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .forgot-step {
+      display: none;
+    }
+
+    .forgot-step.active {
+      display: block;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .forgot-step__icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+
+    .forgot-step__icon .material-icons-round {
+      font-size: 28px;
+    }
+
+    .forgot-step__title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0 0 4px;
+      text-align: center;
+    }
+
+    .forgot-step__sub {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin: 0 0 20px;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .forgot-step__sub strong {
+      color: #00e5ff;
+    }
+
+    .forgot-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.92rem;
+      font-weight: 500;
+      outline: none;
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+      margin-bottom: 6px;
+    }
+
+    .forgot-input:focus {
+      border-color: rgba(0, 229, 255, 0.4);
+      background: rgba(0, 229, 255, 0.04);
+      box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.08);
+    }
+
+    .forgot-input.error {
+      border-color: rgba(244, 63, 94, 0.5);
+      background: rgba(244, 63, 94, 0.04);
+      animation: headShake 0.4s ease;
+    }
+
+    .forgot-input--otp {
+      text-align: center;
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: 10px;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .forgot-error {
+      font-size: 0.73rem;
+      color: var(--accent-rose);
+      font-weight: 600;
+      min-height: 16px;
+      margin-bottom: 12px;
+    }
+
+    .forgot-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .forgot-btn {
+      flex: 1;
+      padding: 11px 16px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s ease;
+    }
+
+    .forgot-btn--cancel {
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+    }
+
+    .forgot-btn--cancel:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    .forgot-btn--primary {
+      border: none;
+      background: var(--gradient-emerald);
+      color: #fff;
+      font-weight: 700;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
+    }
+
+    .forgot-btn--primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.35);
+    }
+
+    .forgot-btn--primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .forgot-timer {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    .forgot-timer strong {
+      color: #fb923c;
+    }
+
+    .forgot-success-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.12);
+      border: 2px solid rgba(16, 185, 129, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+
+    .forgot-success-icon .material-icons-round {
+      font-size: 36px;
+      color: var(--accent-emerald);
+    }
+
+    /* ─── Fixed Header & Scrollable List ─── */
+    html,
+    body {
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-container {
+      height: 100vh;
+      max-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      flex-shrink: 0;
+      background: var(--bg-primary);
+      z-index: 10;
+    }
+
+    .history-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-top: 10px;
+      padding-bottom: 0;
+      gap: 20px;
+    }
+
+    #notif-banner,
+    .filter-row {
+      flex-shrink: 0;
+    }
+
+    .history-section {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 8px !important;
+      margin-bottom: 20px;
+    }
+
+    /* Scrollbar Styling for the list */
+    .history-section::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .history-section::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .history-section::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+
+    .history-section::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Sticky Table Header */
+    .history-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: #0d0d21;
+      /* Solid background matching the theme */
+      box-shadow: 0 1px 0 var(--border-subtle);
+    }
+
+    /* Shift Supplier Name column left */
+    .history-table th:nth-child(2),
+    #bills-body td:nth-child(2) {
+      padding-left: 0 !important;
     }
   </style>
 </head>
+
 <body>
   <div class="bg-grid"></div>
   <div class="bg-glow bg-glow--1"></div>
@@ -509,40 +2016,59 @@
         </button>
       </div>
 
-      <div class="filter-row" style="flex-direction: row; justify-content: space-between; align-items: center; gap: 20px; background: rgba(255,255,255,0.03); padding: 16px 20px; border-radius: 12px; border: 1px solid var(--border-subtle); margin-bottom: 30px;">
+      <div class="filter-row"
+        style="flex-direction: row; justify-content: space-between; align-items: center; gap: 20px; background: rgba(255,255,255,0.03); padding: 16px 20px; border-radius: 12px; border: 1px solid var(--border-subtle);">
         <div class="tab-bar" style="margin-bottom: 0; border-bottom: none;">
           <button class="tab-btn active" id="tab-pending" data-status="pending">
-            <span class="material-icons-round" style="font-size: 18px; vertical-align: middle; margin-right: 6px;">pending_actions</span>
+            <span class="material-icons-round"
+              style="font-size: 18px; vertical-align: middle; margin-right: 6px;">pending_actions</span>
             Due Bills
           </button>
           <button class="tab-btn" id="tab-paid" data-status="paid">
-            <span class="material-icons-round" style="font-size: 18px; vertical-align: middle; margin-right: 6px;">history</span>
+            <span class="material-icons-round"
+              style="font-size: 18px; vertical-align: middle; margin-right: 6px;">history</span>
             Bill History
           </button>
           <button class="tab-btn" id="tab-duedate" data-status="duedate" style="position:relative;">
-            <span class="material-icons-round" style="font-size: 18px; vertical-align: middle; margin-right: 6px;">event_busy</span>
+            <span class="material-icons-round"
+              style="font-size: 18px; vertical-align: middle; margin-right: 6px;">event_busy</span>
             Due Date View
-            <span id="due-date-badge" style="display:none; position:absolute; top:4px; right:-4px; min-width:18px; height:18px; background:var(--accent-rose); border-radius:50%; font-size:0.65rem; font-weight:800; color:#fff; align-items:center; justify-content:center; padding:0 4px;"></span>
+            <span id="due-date-badge"
+              style="display:none; position:absolute; top:4px; right:-4px; min-width:18px; height:18px; background:var(--accent-rose); border-radius:50%; font-size:0.65rem; font-weight:800; color:#fff; align-items:center; justify-content:center; padding:0 4px;"></span>
           </button>
         </div>
         <div class="search-box" style="margin: 0; flex: 0 0 350px;">
           <span class="material-icons-round search-box__icon">search</span>
-          <input type="text" id="search-input" class="search-box__input" placeholder="Search supplier or invoice..." autocomplete="off">
+          <input type="text" id="search-input" class="search-box__input" placeholder="Search supplier or invoice..."
+            autocomplete="off">
         </div>
       </div>
 
-      <section class="section history-section" style="padding: 0; background: transparent; border: none; box-shadow: none;">
+      <section class="section history-section"
+        style="padding: 0; background: transparent; border: none; box-shadow: none;">
         <!-- Standard table view -->
         <div id="table-view">
-          <div class="table-container" style="background: rgba(10, 10, 26, 0.4); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid var(--border-subtle); overflow: hidden;">
-            <table class="history-table" id="bills-table" style="border-collapse: separate; border-spacing: 0; width: 100%;">
+          <div class="table-container"
+            style="background: rgba(10, 10, 26, 0.4); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid var(--border-subtle); overflow: visible;">
+            <table class="history-table" id="bills-table"
+              style="border-collapse: separate; border-spacing: 0; width: 100%;">
               <thead>
                 <tr style="background: rgba(255,255,255,0.03);">
-                  <th style="padding: 18px 12px 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); width: 140px;">Invoice No.</th>
-                  <th style="padding: 18px 12px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle);">Supplier Name</th>
-                  <th style="padding: 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: right;">Total Amount</th>
-                  <th style="padding: 18px 12px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: right; width: 140px;">Action</th>
-                  <th style="padding: 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: center; width: 80px;">Delete</th>
+                  <th
+                    style="padding: 18px 12px 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); width: 140px;">
+                    Invoice No.</th>
+                   <th
+                    style="padding: 18px 12px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; text-align: left;">
+                    <span style="position: relative; left: -20px;">Supplier Name</span></th>
+                  <th
+                    style="padding: 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: right;">
+                    Total Amount</th>
+                  <th
+                    style="padding: 18px 12px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: right; width: 140px;">
+                    Action</th>
+                  <th
+                    style="padding: 18px 24px; font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-subtle); text-align: center; width: 80px;">
+                    Delete</th>
                 </tr>
               </thead>
               <tbody id="bills-body">
@@ -550,8 +2076,10 @@
             </table>
           </div>
           <div class="empty-state" id="empty-state" style="display:none; padding: 100px 0;">
-            <span class="material-icons-round empty-state__icon" style="font-size: 64px; color: var(--border-subtle);">receipt_long</span>
-            <p class="empty-state__text" style="font-size: 1.2rem; font-weight: 600; color: var(--text-muted);">No bills found</p>
+            <span class="material-icons-round empty-state__icon"
+              style="font-size: 64px; color: var(--border-subtle);">receipt_long</span>
+            <p class="empty-state__text" style="font-size: 1.2rem; font-weight: 600; color: var(--text-muted);">No bills
+              found</p>
             <p class="empty-state__sub">Purchase records matching your filter will appear here</p>
           </div>
         </div>
@@ -559,21 +2087,29 @@
         <!-- Due Date grouped view -->
         <div id="duedate-view" style="display:none;">
           <div id="duedate-empty" style="display:none; padding: 100px 0; text-align:center;">
-            <span class="material-icons-round" style="font-size: 64px; color: var(--border-subtle); display:block; margin-bottom:16px;">event_available</span>
-            <p style="font-size: 1.2rem; font-weight: 600; color: var(--text-muted); margin:0;">No pending due bills!</p>
+            <span class="material-icons-round"
+              style="font-size: 64px; color: var(--border-subtle); display:block; margin-bottom:16px;">event_available</span>
+            <p style="font-size: 1.2rem; font-weight: 600; color: var(--text-muted); margin:0;">No pending due bills!
+            </p>
             <p style="color: var(--text-muted); font-size:0.88rem; margin-top:8px;">All bills are fully paid.</p>
           </div>
-          
+
           <div id="duedate-split-layout" style="display: flex; gap: 24px; min-height: 500px;">
             <!-- Left: Calendar -->
-            <div class="calendar-container" style="flex: 0 0 450px; background: rgba(10, 10, 26, 0.4); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid var(--border-subtle); padding: 24px;">
-              <div class="calendar-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-                <h3 id="calendar-month-year" style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin: 0;"></h3>
+            <div class="calendar-container"
+              style="flex: 0 0 450px; background: rgba(10, 10, 26, 0.4); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid var(--border-subtle); padding: 24px;">
+              <div class="calendar-header"
+                style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h3 id="calendar-month-year"
+                  style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin: 0;">
+                </h3>
                 <div style="display: flex; gap: 8px;">
-                  <button class="btn-icon" id="btn-prev-month" title="Previous Month" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-subtle); background: transparent; color: var(--text-muted); cursor: pointer;">
+                  <button class="btn-icon" id="btn-prev-month" title="Previous Month"
+                    style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-subtle); background: transparent; color: var(--text-muted); cursor: pointer;">
                     <span class="material-icons-round">chevron_left</span>
                   </button>
-                  <button class="btn-icon" id="btn-next-month" title="Next Month" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-subtle); background: transparent; color: var(--text-muted); cursor: pointer;">
+                  <button class="btn-icon" id="btn-next-month" title="Next Month"
+                    style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-subtle); background: transparent; color: var(--text-muted); cursor: pointer;">
                     <span class="material-icons-round">chevron_right</span>
                   </button>
                 </div>
@@ -581,16 +2117,20 @@
               <div class="calendar-grid" id="calendar-grid">
                 <!-- Filled by JS -->
               </div>
-              <div class="calendar-legend" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px;">
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-muted);">
+              <div class="calendar-legend"
+                style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px;">
+                <div
+                  style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-muted);">
                   <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-rose);"></span>
                   <span>Overdue Bills</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                <div
+                  style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-muted);">
                   <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-orange);"></span>
                   <span>Due Today</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                <div
+                  style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-muted);">
                   <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-emerald);"></span>
                   <span>Upcoming Due</span>
                 </div>
@@ -598,15 +2138,20 @@
             </div>
 
             <!-- Right: Today's Due -->
-            <div class="today-due-container" style="flex: 1; background: rgba(10, 10, 26, 0.4); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid var(--border-subtle); padding: 24px; display: flex; flex-direction: column;">
+            <div class="today-due-container"
+              style="flex: 1; background: rgba(10, 10, 26, 0.4); backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid var(--border-subtle); padding: 24px; display: flex; flex-direction: column;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 10px;">
+                <h3
+                  style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 10px;">
                   <span class="material-icons-round" style="color: var(--accent-orange);">alarm</span>
                   Today's Due Bills
                 </h3>
-                <span id="today-count-chip" style="background: rgba(251, 146, 60, 0.15); color: var(--accent-orange); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 800;">0 Bills</span>
+                <span id="today-count-chip"
+                  style="background: rgba(251, 146, 60, 0.15); color: var(--accent-orange); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 800;">0
+                  Bills</span>
               </div>
-              <div id="today-due-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
+              <div id="today-due-list"
+                style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
                 <!-- Filled by JS -->
               </div>
             </div>
@@ -619,17 +2164,14 @@
   <!-- PDF Viewer Modal -->
   <div class="pdf-modal-overlay" id="pdf-modal">
     <div class="pdf-modal-header">
-      <h3>
-        <span class="material-icons-round">picture_as_pdf</span>
-        <span id="pdf-modal-title">Purchase Bill</span>
-      </h3>
-      <div style="display: flex; align-items: center; gap: 8px; margin-right: 90px; margin-top: 12px;">
-        <button class="btn-pdf-close" id="btn-pdf-refresh" title="Refresh PDF" style="width: 36px; height: 36px; padding: 0; justify-content: center;">
-          <span class="material-icons-round">refresh</span>
+      <div style="display: flex; align-items: center;">
+        <button class="btn-pdf-back" id="btn-pdf-back" title="Back to list">
+          <span class="material-icons-round">arrow_back</span>
         </button>
-        <button class="btn-pdf-close" id="btn-pdf-header-close" title="Close" style="color: var(--accent-rose); width: 36px; height: 36px; padding: 0; justify-content: center;">
-          <span class="material-icons-round">close</span>
-        </button>
+        <h3>
+          <span class="material-icons-round">picture_as_pdf</span>
+          <span id="pdf-modal-title">Purchase Bill</span>
+        </h3>
       </div>
     </div>
     <div class="pdf-modal-body" id="pdf-modal-body">
@@ -644,20 +2186,43 @@
           <span class="material-icons-round">account_balance_wallet</span>
           Due: <span id="pdf-due-amount">₹0.00</span>
         </div>
+
         <button class="btn-all-paid" id="btn-all-paid">
           <span class="material-icons-round">check_circle</span>
           All Paid
         </button>
       </div>
       <div class="pdf-modal-footer-right">
-        <button class="btn-pdf-download" id="btn-pdf-delete" style="border-color: rgba(244, 63, 94, 0.25); background: rgba(244, 63, 94, 0.08); color: var(--accent-rose);">
+        <button class="btn-pdf-download btn-pdf-action--remark" id="btn-pdf-remark">
+          <span class="material-icons-round">comment</span>
+          Remark
+        </button>
+        <button class="btn-pdf-download btn-pdf-action--edit" id="btn-pdf-edit">
+          <span class="material-icons-round">edit</span>
+          Edit
+        </button>
+        <button class="btn-pdf-download btn-pdf-action--delete" id="btn-pdf-delete">
           <span class="material-icons-round">delete</span>
           Delete
+        </button>
+        <button class="btn-pdf-download btn-pdf-action--changelog" id="btn-pdf-changelog">
+          <span class="material-icons-round">history</span>
+          Change Log
         </button>
         <button class="btn-pdf-download" id="btn-pdf-download">
           <span class="material-icons-round">download</span>
           Download
         </button>
+        <div class="remark-popover" id="remark-popover">
+          <div class="remark-popover__header">
+            <span class="material-icons-round">description</span>
+            <h4>Saved Remark</h4>
+            <button class="remark-popover__close" id="remark-popover-close">
+              <span class="material-icons-round" style="font-size: 16px;">close</span>
+            </button>
+          </div>
+          <div class="remark-popover__content" id="remark-popover-content"></div>
+        </div>
         <button class="btn-pdf-close" id="btn-pdf-close">
           <span class="material-icons-round">close</span>
           Close
@@ -666,6 +2231,287 @@
     </div>
   </div>
 
+  <!-- Change Log Panel -->
+  <div class="changelog-overlay" id="changelog-overlay">
+    <div class="changelog-panel">
+      <div class="changelog-panel__header">
+        <h3>
+          <span class="material-icons-round">history</span>
+          Change History
+        </h3>
+        <button class="btn-pdf-close" id="btn-changelog-close"
+          style="width: 36px; height: 36px; padding: 0; justify-content: center;">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      <div class="changelog-panel__body" id="changelog-body">
+        <!-- Filled by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Password Modal -->
+  <div class="password-overlay" id="password-overlay">
+    <div class="password-modal">
+      <div class="password-modal__icon">
+        <span class="material-icons-round">lock</span>
+      </div>
+      <h3 class="password-modal__title">Enter Password</h3>
+      <p class="password-modal__sub">Authentication required to edit this bill</p>
+      <div class="password-modal__input-wrap">
+        <input type="password" class="password-modal__input" id="pw-input" placeholder="••••••••" autocomplete="off"
+          spellcheck="false">
+        <button class="password-modal__toggle" id="pw-toggle" type="button">
+          <span class="material-icons-round" style="font-size:20px;">visibility_off</span>
+        </button>
+      </div>
+      <div class="password-modal__error" id="pw-error"></div>
+      <div class="password-modal__actions">
+        <button class="btn-pw-cancel" id="pw-cancel">Cancel</button>
+        <button class="btn-pw-submit" id="pw-submit">Unlock</button>
+      </div>
+      <a class="password-modal__forgot" id="pw-forgot">Forgot Password?</a>
+    </div>
+  </div>
+
+  <!-- Forgot Password Modal -->
+  <div class="forgot-overlay" id="forgot-overlay">
+    <div class="forgot-modal">
+
+      <!-- Step 1: Email -->
+      <div class="forgot-step active" id="forgot-step-email">
+        <div class="forgot-step__icon" style="background: rgba(0,229,255,0.08); border: 1px solid rgba(0,229,255,0.2);">
+          <span class="material-icons-round" style="color: #00e5ff;">email</span>
+        </div>
+        <h3 class="forgot-step__title">Reset Password</h3>
+        <p class="forgot-step__sub">Enter your registered email to receive a verification code</p>
+        <input type="email" class="forgot-input" id="forgot-email" placeholder="Enter registered email"
+          autocomplete="off" spellcheck="false">
+        <div class="forgot-error" id="forgot-email-error"></div>
+        <div class="forgot-actions">
+          <button class="forgot-btn forgot-btn--cancel" id="forgot-cancel-1">Cancel</button>
+          <button class="forgot-btn forgot-btn--primary" id="forgot-send-otp">Send OTP</button>
+        </div>
+      </div>
+
+      <!-- Step 2: OTP -->
+      <div class="forgot-step" id="forgot-step-otp">
+        <div class="forgot-step__icon"
+          style="background: rgba(251,146,60,0.08); border: 1px solid rgba(251,146,60,0.2);">
+          <span class="material-icons-round" style="color: #fb923c;">pin</span>
+        </div>
+        <h3 class="forgot-step__title">Enter OTP</h3>
+        <p class="forgot-step__sub">A 6-digit code has been sent to<br><strong id="forgot-masked-email"></strong></p>
+        <input type="text" class="forgot-input forgot-input--otp" id="forgot-otp" placeholder="000000" maxlength="6"
+          autocomplete="off">
+        <div class="forgot-error" id="forgot-otp-error"></div>
+        <div class="forgot-actions">
+          <button class="forgot-btn forgot-btn--cancel" id="forgot-cancel-2">Cancel</button>
+          <button class="forgot-btn forgot-btn--primary" id="forgot-verify-otp">Verify</button>
+        </div>
+        <div class="forgot-timer" id="forgot-timer">OTP expires in <strong>5:00</strong></div>
+      </div>
+
+      <!-- Step 3: New Password -->
+      <div class="forgot-step" id="forgot-step-newpw">
+        <div class="forgot-step__icon"
+          style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2);">
+          <span class="material-icons-round" style="color: var(--accent-emerald);">lock_reset</span>
+        </div>
+        <h3 class="forgot-step__title">Set New Password</h3>
+        <p class="forgot-step__sub">Create a strong password for bill editing access</p>
+        <div class="password-modal__input-wrap" style="margin-bottom: 10px;">
+          <input type="password" class="forgot-input" id="forgot-new-pw" placeholder="New password" autocomplete="off"
+            style="margin-bottom: 0; padding-right: 44px;">
+          <button class="password-modal__toggle" id="forgot-new-pw-toggle" type="button">
+            <span class="material-icons-round" style="font-size:20px;">visibility_off</span>
+          </button>
+        </div>
+        <div class="password-modal__input-wrap">
+          <input type="password" class="forgot-input" id="forgot-confirm-pw" placeholder="Confirm new password"
+            autocomplete="off" style="margin-bottom: 0; padding-right: 44px;">
+          <button class="password-modal__toggle" id="forgot-confirm-pw-toggle" type="button">
+            <span class="material-icons-round" style="font-size:20px;">visibility_off</span>
+          </button>
+        </div>
+        <div class="forgot-error" id="forgot-pw-error"></div>
+        <div class="forgot-actions">
+          <button class="forgot-btn forgot-btn--cancel" id="forgot-cancel-3">Cancel</button>
+          <button class="forgot-btn forgot-btn--primary" id="forgot-save-pw">Save Password</button>
+        </div>
+      </div>
+
+      <!-- Step 4: Success -->
+      <div class="forgot-step" id="forgot-step-success">
+        <div class="forgot-success-icon">
+          <span class="material-icons-round">check</span>
+        </div>
+        <h3 class="forgot-step__title">Password Updated!</h3>
+        <p class="forgot-step__sub">Your new password has been saved successfully.<br>Use it next time you edit a bill.
+        </p>
+        <div class="forgot-actions" style="justify-content: center;">
+          <button class="forgot-btn forgot-btn--primary" id="forgot-done"
+            style="flex: none; min-width: 160px;">Done</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Edit Bill Modal -->
+  <div class="edit-modal-overlay" id="edit-modal">
+    <div class="edit-modal">
+      <div class="edit-modal__header">
+        <h3>
+          <span class="material-icons-round">edit_note</span>
+          Edit Purchase Bill
+        </h3>
+        <button class="btn-pdf-close" id="btn-edit-close"
+          style="width: 36px; height: 36px; padding: 0; justify-content: center;">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      <div class="edit-modal__body">
+        <!-- Supplier Info -->
+        <div class="edit-modal__section">
+          <div class="edit-modal__section-title">
+            <span class="material-icons-round">business</span>
+            Supplier Information
+          </div>
+          <div class="edit-modal__grid">
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Supplier Name *</label>
+              <input type="text" class="edit-modal__input" id="edit-supplier-name" placeholder="Supplier name">
+            </div>
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Invoice Number *</label>
+              <input type="text" class="edit-modal__input" id="edit-invoice-number" placeholder="INV-001">
+            </div>
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Supplier Address</label>
+              <textarea class="edit-modal__input" id="edit-supplier-address" placeholder="Address" rows="2"></textarea>
+            </div>
+            <div class="edit-modal__field">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                <label class="edit-modal__label" style="margin-bottom: 0;">Remarks</label>
+                <label class="switch-container" title="Show remark in PDF">
+                  <span
+                    style="font-size: 0.65rem; font-weight: 700; color: var(--text-muted); margin-right: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Show
+                    in PDF</span>
+                  <div class="switch">
+                    <input type="checkbox" id="edit-show-remarks-pdf" checked>
+                    <span class="slider"></span>
+                  </div>
+                </label>
+              </div>
+              <textarea class="edit-modal__input" id="edit-remarks" placeholder="Notes or remarks" rows="2"></textarea>
+            </div>
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Contact Number</label>
+              <input type="tel" class="edit-modal__input" id="edit-phone" placeholder="Phone number" maxlength="25">
+            </div>
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Email</label>
+              <input type="email" class="edit-modal__input" id="edit-email" placeholder="email@example.com">
+            </div>
+          </div>
+        </div>
+
+        <!-- Dates -->
+        <div class="edit-modal__section">
+          <div class="edit-modal__section-title">
+            <span class="material-icons-round">event</span>
+            Important Dates
+          </div>
+          <div class="edit-modal__grid">
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Bill Date</label>
+              <input type="date" class="edit-modal__input" id="edit-bill-date">
+            </div>
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Due Date</label>
+              <input type="date" class="edit-modal__input" id="edit-due-date">
+            </div>
+          </div>
+        </div>
+
+        <!-- Items -->
+        <div class="edit-modal__section">
+          <div class="edit-modal__section-title">
+            <span class="material-icons-round">inventory_2</span>
+            Bill Items
+          </div>
+          <table class="edit-modal__items-table">
+            <thead>
+              <tr>
+                <th style="width:30px;">#</th>
+                <th>Product</th>
+                <th style="width:70px; text-align:center;">Qty</th>
+                <th style="width:90px; text-align:right;">Rate (₹)</th>
+                <th style="width:70px; text-align:right;">GST %</th>
+                <th style="width:90px; text-align:right;">Amount</th>
+                <th style="width:36px;"></th>
+              </tr>
+            </thead>
+            <tbody id="edit-items-body"></tbody>
+          </table>
+          <button class="btn-edit-add-item" id="btn-edit-add-item">
+            <span class="material-icons-round" style="font-size:16px;">add</span>
+            Add Item
+          </button>
+        </div>
+
+        <!-- Billing Summary -->
+        <div class="edit-modal__section">
+          <div class="edit-modal__section-title">
+            <span class="material-icons-round">receipt_long</span>
+            Billing Summary
+          </div>
+          <div class="edit-modal__grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Total Amount (₹)</label>
+              <input type="number" class="edit-modal__input edit-modal__input--readonly" id="edit-total-amount"
+                placeholder="0.00" step="0.01" readonly
+                style="font-family:'Outfit',sans-serif; font-weight:700; color:var(--accent-emerald);">
+            </div>
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Discount (₹)</label>
+              <input type="number" class="edit-modal__input" id="edit-discount" placeholder="0.00" step="0.01"
+                style="font-family:'Outfit',sans-serif; font-weight:600; color:var(--accent-orange);">
+            </div>
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Paid Amount (₹)</label>
+              <input type="number" class="edit-modal__input" id="edit-paid-amount" placeholder="0.00" step="0.01"
+                style="font-family:'Outfit',sans-serif; font-weight:600;">
+            </div>
+            <div class="edit-modal__field">
+              <label class="edit-modal__label">Due Amount (₹)</label>
+              <input type="number" class="edit-modal__input edit-modal__input--readonly" id="edit-due-amount"
+                placeholder="0.00" step="0.01" readonly
+                style="font-family:'Outfit',sans-serif; font-weight:700; color:var(--accent-rose);">
+            </div>
+          </div>
+          <p
+            style="margin-top: 6px; font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+            <span class="material-icons-round" style="font-size: 13px;">info</span>
+            Total is auto-calculated from items. Due = Total − Discount − Paid.
+          </p>
+        </div>
+      </div>
+      <div class="edit-modal__footer">
+        <button class="btn-edit-cancel" id="btn-edit-cancel">
+          <span class="material-icons-round">close</span>
+          Cancel
+        </button>
+        <button class="btn-edit-save" id="btn-edit-save">
+          <span class="material-icons-round">save</span>
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="../scripts/bill_history.js"></script>
 </body>
+
 </html>
