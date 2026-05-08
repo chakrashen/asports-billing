@@ -1,6 +1,6 @@
 {
   "name": "asports-billing",
-  "version": "1.0.4",
+  "version": "1.0.3",
   "description": "ASPORTS ZONE Billing System",
   "main": "main.js",
   "scripts": {
