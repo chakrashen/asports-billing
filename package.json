@@ -1,6 +1,6 @@
 {
   "name": "asports-billing",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "ASPORTS ZONE Billing System",
   "main": "main.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "rebuild": "npx @electron/rebuild",
     "postinstall": "npx @electron/rebuild",
     "dist": "electron-builder --win",
-    "publish": "electron-builder --win --publish always"
+    "publish": "publish.bat"
   },
   "build": {
     "appId": "com.asports.billing",
@@ -38,6 +38,10 @@
       {
         "from": "node_modules/electron/dist/ffmpeg.dll",
         "to": "ffmpeg.dll"
+      },
+      {
+        "from": ".env",
+        "to": ".env"
       }
     ],
     "asar": true,
