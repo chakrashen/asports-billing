@@ -1,6 +1,6 @@
 {
   "name": "asports-billing",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "ASPORTS ZONE Billing System",
   "main": "main.js",
   "scripts": {
@@ -21,7 +21,14 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "chakrashen",
+      "repo": "asports-billing",
+      "releaseType": "release"
     },
     "nsis": {
       "oneClick": false,
@@ -44,13 +51,7 @@
         "to": ".env"
       }
     ],
-    "asar": true,
-    "publish": {
-      "provider": "github",
-      "owner": "chakrashen",
-      "repo": "asports-billing",
-      "releaseType": "release"
-    }
+    "asar": true
   },
   "keywords": [],
   "author": "ASPORTS ZONE",
