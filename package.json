@@ -1,6 +1,6 @@
 {
   "name": "asports-billing",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "description": "ASPORTS ZONE Billing System",
   "main": "main.js",
   "scripts": {
@@ -57,6 +57,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
     "better-sqlite3": "^12.8.0",
     "dotenv": "^17.4.2",
     "electron-updater": "^6.8.3",
