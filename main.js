@@ -1,11 +1,17 @@
-require('dotenv').config();
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
 const path = require('path');
+// Load .env from the correct location in both dev and packaged app
+const envPath = require('electron')?.app?.isPackaged
+  ? path.join(process.resourcesPath, '..', '.env')
+  : path.join(__dirname, '.env');
+require('dotenv').config({ path: envPath });
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
 const db = require('./database/db');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const os = require('os');
 const { autoUpdater } = require('electron-updater');
+const supabase = require('./database/supabase');
+const cloudSync = require('./database/supabaseSync');
 
 let mainWindow;
 
@@ -79,12 +85,397 @@ ipcMain.handle('save-invoice', async (event, invoiceData) => {
     // Fetch the invoice number we just created to return it to the frontend
     const savedInv = db.prepare('SELECT invoice_number FROM sales_invoices WHERE id = ?').get(res.invoiceId);
 
+    // ── Sync to Supabase (cloud) ──
+    cloudSync.syncSaveInvoice(res.invoiceId, {
+      customerName, phone, email, address, totalAmount,
+      invoiceNumber: savedInv?.invoice_number, paidAmount, dueAmount, discount: discountAmount
+    }, items);
+
+    // ─── Automate WhatsApp Delivery (DoubleTick) ───────────────────
+    if (phone) {
+      console.log(`[WhatsApp Sync] Triggering automatic WhatsApp delivery for Invoice #${savedInv?.invoice_number}...`);
+      // Run in background (non-blocking)
+      sendWhatsAppInvoice({ ...invoiceData, invoiceNumber: savedInv?.invoice_number })
+        .then(result => {
+          if (result.success) console.log(`[WhatsApp Sync] ✅ WhatsApp delivered to ${phone}`);
+          else console.error(`[WhatsApp Sync] ❌ Failed to deliver WhatsApp:`, result.error);
+        })
+        .catch(err => console.error(`[WhatsApp Sync] CRITICAL ERROR:`, err));
+    }
+
     return { success: true, ...res, invoiceNumber: savedInv?.invoice_number };
   } catch (error) {
     console.error('Error saving invoice:', error);
     return { success: false, error: error.message };
   }
 });
+
+ipcMain.handle('get-app-version', () => app.getVersion());
+
+// ─── Auto-Update IPC Handlers ──────────────────────────────
+ipcMain.handle('start-update-download', async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (err) {
+    console.error('[ASPORTS] Failed to start update download:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('install-update', () => {
+  autoUpdater.quitAndInstall(false, true);
+});
+
+// Helper: Generate Invoice PDF and return file path
+async function generateInvoicePDF(invoiceData) {
+  return new Promise((resolve, reject) => {
+    try {
+      const { customerName, items, invoiceNumber, phone, email, address, paidAmount = 0, dueAmount = 0 } = invoiceData;
+      const discountAmount = invoiceData.discountAmount !== undefined ? invoiceData.discountAmount : (invoiceData.discount || 0);
+
+      const sanitizedName = customerName.replace(/[<>:"/\\|?*]/g, '').trim() || 'Invoice';
+      const invNo = (invoiceNumber || 'NEW').toString().replace(/[<>:"/\\|?*]/g, '_').trim();
+      const filename = `Invoice_${invNo}_${sanitizedName}_${Date.now()}.pdf`;
+      const desktopPath = path.join(os.homedir(), 'Desktop');
+      const filePath = path.join(desktopPath, filename);
+
+      // Ensure directory exists
+      const fileDir = path.dirname(filePath);
+      if (!fs.existsSync(fileDir)) {
+        fs.mkdirSync(fileDir, { recursive: true });
+      }
+
+      const doc = new PDFDocument({
+        size: 'A4',
+        margin: 30,
+        bufferPages: true
+      });
+      const stream = fs.createWriteStream(filePath);
+      doc.pipe(stream);
+
+      const margin = 30;
+      const width = 535; // 595.28 - 60
+      const bottomY = 810;
+
+      // Outer Main Bounding Box
+      doc.lineWidth(1).strokeColor('#000').rect(margin, margin, width, bottomY - margin).stroke();
+
+      // Top Banner (TAX INVOICE)
+      doc.rect(margin, margin, width, 25).fillAndStroke('#2f5597', '#000');
+      doc.fillColor('#fff').fontSize(14).font('Helvetica-Bold').text('TAX INVOICE', margin, margin + 6, { width: width, align: 'center' });
+      doc.fontSize(8).text(`INVOICE NO : ${invNo}`, margin, margin + 4, { width: width - 5, align: 'right' });
+      const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
+      doc.text(`DATE : ${dateStr}`, margin, margin + 14, { width: width - 5, align: 'right' });
+
+      // BUSINESS NAME Section
+      doc.fillColor('#000').fontSize(18).font('Helvetica-Bold').text('ASPORTS ZONE', margin, margin + 35, { width: width, align: 'center' });
+      doc.fontSize(10).font('Helvetica').text('2nd Rd, Gandhi Maidan, Sardarpura, Jodhpur, Rajasthan', margin, margin + 55, { width: width, align: 'center' });
+      doc.fontSize(9).text('GSTIN: 08GGVPM6232F1ZW', margin, margin + 68, { width: width, align: 'center' });
+      doc.text('Email ID: sportswallajodhpur@gmail.com', margin, margin + 79, { width: width, align: 'center' });
+      doc.text('Phone NO. +91 9256323239', margin, margin + 90, { width: width, align: 'center' });
+
+      // Horizontal line under Business Name
+      doc.moveTo(margin, 140).lineTo(margin + width, 140).stroke();
+
+      // ── Bill To Section (Left) & Payment Details (Right) ──
+      const billToTopY = 140;
+      const halfW = width / 2;
+      doc.font('Helvetica').fontSize(9);
+      const addressText = 'ADDRESS:\n' + (address ? address : 'N/A');
+      const addressHeight = doc.heightOfString(addressText, { width: halfW - 10 });
+      let leftContentHeight = 13 + 12 + 2 + addressHeight + 5;
+      if (email) leftContentHeight += 11;
+      if (phone) leftContentHeight += 11;
+      const rightContentHeight = 13 * 4 + 15;
+      const billToBoxH = Math.max(80, Math.ceil(Math.max(leftContentHeight, rightContentHeight)) + 10);
+      const billToBottomY = billToTopY + billToBoxH;
+
+      doc.rect(margin + halfW, billToTopY, halfW, billToBoxH).fill('#e6f2ff');
+      doc.moveTo(margin + halfW, billToTopY).lineTo(margin + halfW, billToBottomY).strokeColor('#000').stroke();
+
+      doc.fillColor('#000');
+      doc.font('Helvetica-Bold').fontSize(10).text('Bill To:', margin + 5, billToTopY + 5);
+      doc.text(customerName.toUpperCase(), margin + 5, billToTopY + 18);
+      doc.font('Helvetica').fontSize(9);
+      const addrY = billToTopY + 30;
+      doc.text(addressText, margin + 5, addrY, { width: halfW - 10 });
+      let leftCursorY = addrY + addressHeight + 3;
+      if (email) { doc.text('Email ID: ' + email, margin + 5, leftCursorY); leftCursorY += 11; }
+      if (phone) { doc.text('Phone: ' + phone, margin + 5, leftCursorY); leftCursorY += 11; }
+
+      const subTotalItems = items.reduce((sum, item) => sum + (item.qty * (item.price || item.rate || 0)), 0);
+      const totalGst = items.reduce((sum, item) => sum + (item.qty * (item.price || item.rate || 0) * ((item.gstPercent || item.gst_percent || 0) / 100)), 0);
+      const totalGrandAmount = subTotalItems + totalGst;
+      const rightX = margin + halfW + 5;
+      const rightSpan = halfW - 10;
+      const payY = billToTopY + 18;
+
+      doc.text('Total Grand Amount:', rightX, payY);
+      doc.text(`${totalGrandAmount.toFixed(2)}`, rightX, payY, { width: rightSpan - 5, align: 'right' });
+      doc.text('Discount:', rightX, payY + 13);
+      doc.text(`${(discountAmount || 0).toFixed(2)}`, rightX, payY + 13, { width: rightSpan - 5, align: 'right' });
+      doc.text('Amount Paid:', rightX, payY + 26);
+      doc.text(`${(paidAmount || 0).toFixed(2)}`, rightX, payY + 26, { width: rightSpan - 5, align: 'right' });
+      const finalDue = totalGrandAmount - (discountAmount || 0) - (paidAmount || 0);
+      const dueY = payY + 39;
+
+      if (finalDue > 0) {
+        doc.rect(margin + halfW + 3, dueY - 4, halfW - 10, 15).fill('#ffff00');
+        doc.fillColor('#000').font('Helvetica-Bold');
+        doc.text('Due Amount:', rightX, dueY);
+        doc.text(`${finalDue.toFixed(2)}`, rightX, dueY, { width: rightSpan - 5, align: 'right' });
+        doc.font('Helvetica');
+      } else {
+        doc.fillColor('#000').font('Helvetica');
+        doc.text('Due Amount:', rightX, dueY);
+        doc.text(`${finalDue.toFixed(2)}`, rightX, dueY, { width: rightSpan - 5, align: 'right' });
+      }
+
+      doc.moveTo(margin, billToBottomY).lineTo(margin + width, billToBottomY).stroke();
+      const yHeaders = billToBottomY;
+      doc.moveTo(margin, yHeaders + 20).lineTo(margin + width, yHeaders + 20).stroke();
+
+      const colXs = [margin, margin + 200, margin + 260, margin + 310, margin + 380, margin + 440, margin + width];
+      doc.font('Helvetica-Bold').fontSize(9);
+      doc.text('Description', colXs[0] + 5, yHeaders + 6);
+      doc.text('HSN Code', colXs[1] + 5, yHeaders + 6);
+      doc.text('Qty', colXs[2] + 5, yHeaders + 6, { width: colXs[3] - colXs[2] - 10, align: 'center' });
+      doc.text('Rate', colXs[3] + 5, yHeaders + 6, { width: colXs[4] - colXs[3] - 10, align: 'center' });
+      doc.text('GST %', colXs[4] + 5, yHeaders + 6, { width: colXs[5] - colXs[4] - 10, align: 'center' });
+      doc.text('Amount', colXs[5] + 5, yHeaders + 6, { width: colXs[6] - colXs[5] - 10, align: 'center' });
+
+      const tableBottom = Math.max(yHeaders + 20 + (items.length * 15) + 30, yHeaders + 370);
+      doc.moveTo(colXs[1], yHeaders).lineTo(colXs[1], tableBottom).stroke();
+      doc.moveTo(colXs[2], yHeaders).lineTo(colXs[2], tableBottom).stroke();
+      doc.moveTo(colXs[3], yHeaders).lineTo(colXs[3], tableBottom).stroke();
+      doc.moveTo(colXs[4], yHeaders).lineTo(colXs[4], tableBottom).stroke();
+      doc.moveTo(colXs[5], yHeaders).lineTo(colXs[5], tableBottom).stroke();
+
+      doc.font('Helvetica').fontSize(9);
+      let rowY = yHeaders + 25;
+      items.forEach((item) => {
+        const itemBaseTotal = item.qty * (item.price || item.rate || 0);
+        const gstPct = item.gstPercent || item.gst_percent || 0;
+        doc.text(item.product, colXs[0] + 5, rowY, { width: colXs[1] - colXs[0] - 10 });
+        doc.text('-', colXs[1] + 5, rowY, { width: colXs[2] - colXs[1] - 10, align: 'center' });
+        doc.text(`${item.qty}`, colXs[2] + 5, rowY, { width: colXs[3] - colXs[2] - 10, align: 'center' });
+        doc.text((item.price || item.rate || 0).toFixed(2), colXs[3] + 5, rowY, { width: colXs[4] - colXs[3] - 10, align: 'right' });
+        doc.text(`${gstPct}%`, colXs[4] + 5, rowY, { width: colXs[5] - colXs[4] - 10, align: 'center' });
+        doc.text(itemBaseTotal.toFixed(2), colXs[5] + 5, rowY, { width: colXs[6] - colXs[5] - 10, align: 'right' });
+        rowY += 15;
+      });
+
+      const footerY = tableBottom - 15;
+      doc.moveTo(margin, footerY).lineTo(margin + width, footerY).stroke();
+      doc.font('Helvetica-Bold').fontSize(9);
+      const totalQty = items.reduce((sum, it) => sum + it.qty, 0);
+      doc.text('Total', colXs[0] + 5, footerY + 4);
+      doc.text('-', colXs[1] + 5, footerY + 4, { width: colXs[2] - colXs[1] - 10, align: 'center' });
+      doc.text(`${totalQty}`, colXs[2] + 5, footerY + 4, { width: colXs[3] - colXs[2] - 10, align: 'center' });
+      doc.text(subTotalItems.toFixed(2), colXs[5] + 5, footerY + 4, { width: colXs[6] - colXs[5] - 10, align: 'right' });
+
+      const afterTableY = tableBottom;
+      doc.moveTo(margin, afterTableY).lineTo(margin + width, afterTableY).stroke();
+
+      const midX = margin + 290;
+      const termsBottomY = afterTableY + 80;
+      doc.moveTo(midX, afterTableY).lineTo(midX, termsBottomY).stroke();
+      doc.font('Helvetica-Bold').fontSize(9).text('Terms & conditions', margin + 5, afterTableY + 5);
+      doc.font('Helvetica').fontSize(8);
+      doc.text('Orders once confirmed cannot be canceled.', margin + 5, afterTableY + 18);
+      doc.text('No refunds will be processed under any circumstances.', margin + 5, afterTableY + 28);
+      doc.text('The provider is not liable for any indirect or consequential', margin + 5, afterTableY + 38);
+      doc.text('losses from the use of services/products.', margin + 5, afterTableY + 48);
+      doc.text("Subject to 'jodhpur' Jurisdiction only.", margin + 5, afterTableY + 58);
+
+      doc.font('Helvetica-Bold').fontSize(9);
+      const rightPadding = 5;
+      const summarySpan = margin + width - midX - (rightPadding * 2);
+      const taxesY = afterTableY + 5;
+      doc.text(`CGST :`, midX + rightPadding, taxesY);
+      doc.text((totalGst / 2).toFixed(2), midX + rightPadding, taxesY, { width: summarySpan, align: 'right' });
+      doc.text(`SGST :`, midX + rightPadding, taxesY + 12);
+      doc.text((totalGst / 2).toFixed(2), midX + rightPadding, taxesY + 12, { width: summarySpan, align: 'right' });
+      doc.moveTo(midX + 160, taxesY + 24).lineTo(margin + width - 5, taxesY + 24).stroke();
+      const netTotal = totalGrandAmount - (discountAmount || 0);
+      doc.text(`Total Tax :`, midX + rightPadding, taxesY + 28);
+      doc.text(totalGst.toFixed(2), midX + rightPadding, taxesY + 28, { width: summarySpan, align: 'right' });
+      doc.text(`Discount :`, midX + rightPadding, taxesY + 40);
+      doc.text((discountAmount || 0).toFixed(2), midX + rightPadding, taxesY + 40, { width: summarySpan, align: 'right' });
+
+      const grandTotalY = afterTableY + 62;
+      doc.rect(midX, grandTotalY, margin + width - midX, 18).fillAndStroke('#2f5597', '#000');
+      doc.fillColor('#fff').text('Grand Total', midX + rightPadding, grandTotalY + 5);
+      doc.text(netTotal.toFixed(2), midX + rightPadding, grandTotalY + 5, { width: summarySpan, align: 'right' });
+
+      const wordsY = termsBottomY;
+      doc.fillColor('#000');
+      doc.moveTo(margin, wordsY).lineTo(margin + width, wordsY).stroke();
+      doc.font('Helvetica-Bold').fontSize(9).text('Total Amount (₹ - In Words) :', margin + 5, wordsY + 5);
+      doc.font('Helvetica').fontSize(9).text(numberToWords(Math.round(netTotal)), margin + 145, wordsY + 5);
+
+      const sigY = wordsY + 40;
+      doc.moveTo(margin, sigY).lineTo(margin + width, sigY).stroke();
+      doc.font('Helvetica-Bold').fontSize(10).text('For : ASPORTS ZONE', margin + 5, sigY + 10);
+      doc.font('Helvetica-Bold').fontSize(9).text('Authorised Signatory', margin + 5, bottomY - 15);
+
+      stream.on('finish', () => resolve(filePath));
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+// ─── Automate WhatsApp Delivery (DoubleTick) ───────────────────────────
+
+async function sendWhatsAppInvoice(invoiceData) {
+  const apiKey = process.env.DOUBLETICK_API_KEY;
+  const fromNumber = process.env.DOUBLETICK_WABA_NUMBER;
+
+  if (!apiKey || !fromNumber) {
+    return { success: false, error: 'DoubleTick API credentials missing in .env' };
+  }
+
+  try {
+    const { phone, customerName, invoiceNumber } = invoiceData;
+    // Format phone number (ensure +91 for India if not present)
+    let toPhone = phone.trim().replace(/\s+/g, '');
+    if (toPhone.length === 10) toPhone = '+91' + toPhone;
+    else if (toPhone.startsWith('0')) toPhone = '+91' + toPhone.substring(1);
+    else if (!toPhone.startsWith('+')) toPhone = '+' + toPhone;
+
+    // 1. Generate PDF
+    console.log('[WhatsApp Sync] Generating PDF...');
+    const filePath = await generateInvoicePDF(invoiceData);
+
+    // 2. Upload PDF to DoubleTick
+    console.log('[WhatsApp Sync] Uploading PDF to DoubleTick...');
+    const uploadRes = await uploadToDoubleTick(filePath, apiKey);
+    if (!uploadRes.success) throw new Error(`Upload failed: ${uploadRes.error}`);
+    const mediaUrl = uploadRes.mediaUrl;
+    console.log('[WhatsApp Sync] PDF uploaded successfully:', mediaUrl);
+
+    // 3. Send Template Message (your_order_is_confirmed__)
+    console.log(`[WhatsApp Sync] Sending confirmation template to ${toPhone}...`);
+    const templateRes = await fetch('https://public.doubletick.io/whatsapp/message/template', {
+      method: 'POST',
+      headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{
+          to: toPhone,
+          from: fromNumber,
+          content: {
+            language: 'en',
+            templateName: 'your_order_is_confirmed__',
+            templateData: {} // Omit placeholders since there are none
+          }
+        }]
+      })
+    });
+
+    const templateData = await templateRes.json().catch(() => ({}));
+    if (!templateRes.ok) {
+      console.warn('[WhatsApp Sync] ⚠️ Template message failed:', templateRes.status, JSON.stringify(templateData));
+    } else {
+      console.log('[WhatsApp Sync] ✅ Template message sent. ID:', templateData.msgId || 'N/A');
+    }
+
+    // ─── CRITICAL: Wait for the window to open ───
+    console.log('[WhatsApp Sync] Waiting 10 seconds for WhatsApp window to open...');
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    // 4. Send Document Message (The Invoice PDF)
+    console.log(`[WhatsApp Sync] Sending Invoice PDF document to ${toPhone}...`);
+    const docRes = await fetch('https://public.doubletick.io/whatsapp/message/document', {
+      method: 'POST',
+      headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{
+          to: toPhone,
+          from: fromNumber,
+          content: {
+            mediaUrl: mediaUrl,
+            filename: `Invoice_${invoiceNumber}_ASPORTS.pdf`
+          }
+        }]
+      })
+    });
+
+    const docData = await docRes.json().catch(() => ({}));
+    if (!docRes.ok) {
+      console.error('[WhatsApp Sync] ❌ Document message failed:', docRes.status, JSON.stringify(docData));
+      // If it still fails with 422, it means the window didn't open
+      if (docRes.status === 422) {
+        throw new Error('WhatsApp window is closed. PDF can only be sent if the customer replies to your message, OR if you use a template with a Document Header.');
+      }
+      throw new Error(`Document send failed: HTTP ${docRes.status}`);
+    } else {
+      console.log('[WhatsApp Sync] ✅ Document message sent.');
+    }
+
+    return { success: true };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+
+async function uploadToDoubleTick(filePath, apiKey) {
+  return new Promise((resolve) => {
+    const https = require('https');
+    const fs = require('fs');
+    const path = require('path');
+
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+    const filename = path.basename(filePath);
+    const fileStream = fs.createReadStream(filePath);
+
+    const options = {
+      method: 'POST',
+      hostname: 'public.doubletick.io',
+      path: '/media/upload',
+      headers: {
+        'Authorization': apiKey,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            const json = JSON.parse(data);
+            resolve({ success: true, mediaUrl: json.mediaUrl });
+          } catch (e) {
+            resolve({ success: false, error: 'Invalid JSON response from DoubleTick' });
+          }
+        } else {
+          resolve({ success: false, error: `HTTP ${res.statusCode}: ${data}` });
+        }
+      });
+    });
+
+    req.on('error', (err) => resolve({ success: false, error: err.message }));
+
+    // Write multipart body
+    req.write(`--${boundary}\r\n`);
+    req.write(`Content-Disposition: form-data; name="file"; filename="${filename}"\r\n`);
+    req.write(`Content-Type: application/pdf\r\n\r\n`);
+
+    fileStream.pipe(req, { end: false });
+    fileStream.on('end', () => {
+      req.write(`\r\n--${boundary}--\r\n`);
+      req.end();
+    });
+  });
+}
+
+
 
 // Get next invoice number
 ipcMain.handle('get-next-invoice-number', async () => {
@@ -138,6 +529,8 @@ ipcMain.handle('clear-customer-dues', async (event, { name, phone }) => {
     `);
 
     update.run(name, phone, phone);
+    // ── Sync to Supabase ──
+    cloudSync.syncClearCustomerDues(name, phone);
     return { success: true };
   } catch (error) {
     console.error('Error clearing customer dues:', error);
@@ -153,6 +546,8 @@ ipcMain.handle('clear-invoice-dues', async (event, invoiceId) => {
       WHERE id = ?
     `);
     update.run(invoiceId);
+    // ── Sync to Supabase ──
+    cloudSync.syncClearInvoiceDues(invoiceId);
     return { success: true };
   } catch (error) {
     console.error('Error clearing invoice dues:', error);
@@ -172,6 +567,8 @@ ipcMain.handle('delete-invoice', async (event, invoiceId) => {
     });
 
     transaction(invoiceId);
+    // ── Sync to Supabase ──
+    cloudSync.syncDeleteInvoice(invoiceId);
     return { success: true };
   } catch (error) {
     console.error('Error deleting invoice:', error);
@@ -191,6 +588,8 @@ ipcMain.handle('delete-order', async (event, orderId) => {
     });
 
     transaction(orderId);
+    // ── Sync to Supabase ──
+    cloudSync.syncDeleteOrder(orderId);
     return { success: true };
   } catch (error) {
     console.error('Error deleting order:', error);
@@ -223,6 +622,11 @@ ipcMain.handle('save-order', async (event, data) => {
     });
 
     const orderNumber = transaction(supplierName, phone, email, address, items);
+    // ── Sync to Supabase ──
+    const savedOrder = db.prepare('SELECT id FROM purchase_orders WHERE order_number = ?').get(orderNumber);
+    if (savedOrder) {
+      cloudSync.syncSaveOrder(savedOrder.id, { supplierName, phone, email, address, orderNumber }, items);
+    }
     return { success: true, orderNumber };
   } catch (error) {
     console.error('Error saving purchase order:', error);
@@ -257,10 +661,61 @@ ipcMain.handle('save-bill', async (event, data) => {
       for (const item of billItems) {
         insertItem.run(billId, item.product, item.qty, item.rate, item.gstPercent || 0);
       }
+      return billId;
     });
 
-    transaction(supplierName, supplierAddress || null, phone || null, email || null, invoiceNumber, billDate || null, dueDate || null, totalAmount, discount, paidAmount || 0, dueAmount || 0, billStatus, remarks || null, data.showRemarks ? 1 : 0, items);
-    return { success: true };
+    const savedBillId = transaction(supplierName, supplierAddress || null, phone || null, email || null, invoiceNumber, billDate || null, dueDate || null, totalAmount, discount, paidAmount || 0, dueAmount || 0, billStatus, remarks || null, data.showRemarks ? 1 : 0, items);
+
+    // ── Sync to Supabase (cloud) ──
+    cloudSync.syncSaveBill(savedBillId, {
+      supplierName, supplierAddress, phone, email, invoiceNumber,
+      billDate, dueDate, totalAmount, discount, paidAmount, dueAmount,
+      status: billStatus, remarks, showRemarks: data.showRemarks
+    }, items);
+
+    // ── Sync products to Shopify as DRAFT ──
+    console.log('[Shopify Sync] New bill saved — now syncing products to Shopify...');
+    console.log('[Shopify Sync] Supplier:', supplierName, '| Invoice:', invoiceNumber, '| Items:', items.length);
+    let shopifyResult = { synced: false, reason: 'Not attempted' };
+    try {
+      shopifyResult = await syncBillProductsToShopifyDraft(supplierName, invoiceNumber, items);
+    } catch (shopifyErr) {
+      console.error('[Shopify Sync] Unexpected error:', shopifyErr);
+      shopifyResult = { synced: false, reason: shopifyErr.message };
+    }
+
+    // Show native dialog with result
+    try {
+      const { BrowserWindow } = require('electron');
+      const win = BrowserWindow.getFocusedWindow();
+      if (shopifyResult.synced && shopifyResult.successCount === shopifyResult.totalCount) {
+        dialog.showMessageBoxSync(win, {
+          type: 'info',
+          title: 'Shopify Sync Complete',
+          message: `✅ ${shopifyResult.successCount} product(s) added to Shopify as Draft successfully!`
+        });
+      } else if (shopifyResult.synced) {
+        const failedDetails = (shopifyResult.results || [])
+          .filter(r => !r.success)
+          .map(r => `${r.product}: ${r.error}`)
+          .join('\n');
+        dialog.showMessageBoxSync(win, {
+          type: 'warning',
+          title: 'Shopify Sync Partial',
+          message: `${shopifyResult.successCount}/${shopifyResult.totalCount} products synced.\n\nErrors:\n${failedDetails}`
+        });
+      } else {
+        dialog.showMessageBoxSync(win, {
+          type: 'error',
+          title: 'Shopify Sync Failed',
+          message: `Shopify sync was not attempted.\nReason: ${shopifyResult.reason}`
+        });
+      }
+    } catch (dlgErr) {
+      console.error('[Shopify Sync] Dialog error:', dlgErr);
+    }
+
+    return { success: true, shopify: shopifyResult };
   } catch (error) {
     console.error('Error saving purchase bill:', error);
     return { success: false, error: error.message };
@@ -311,6 +766,9 @@ ipcMain.handle('update-order', async (event, data) => {
     });
 
     transaction(orderId, supplierName, phone, email, address, items);
+    // ── Sync to Supabase ──
+    const orderRow = db.prepare('SELECT order_number FROM purchase_orders WHERE id = ?').get(orderId);
+    cloudSync.syncSaveOrder(orderId, { supplierName, phone, email, address, orderNumber: orderRow?.order_number }, items);
     return { success: true };
   } catch (error) {
     console.error('Error updating purchase order:', error);
@@ -356,6 +814,8 @@ ipcMain.handle('update-bill-status', async (event, { billId, status }) => {
   try {
     const update = db.prepare('UPDATE purchase_bills SET status = ? WHERE id = ?');
     update.run(status, billId);
+    // ── Sync to Supabase ──
+    cloudSync.syncUpdateBillStatus(billId, status);
     return { success: true };
   } catch (error) {
     console.error('Error updating bill status:', error);
@@ -387,6 +847,9 @@ ipcMain.handle('clear-bill-dues', async (event, billId) => {
         insertLog.run(billId, editGroup, 'Status', oldBill.status || 'pending', 'paid');
       }
     }
+    // ── Sync to Supabase ──
+    const clearedBill = db.prepare('SELECT paid_amount FROM purchase_bills WHERE id = ?').get(billId);
+    cloudSync.syncClearBillDues(billId, clearedBill?.paid_amount || 0);
     return { success: true };
   } catch (error) {
     console.error('Error clearing bill dues:', error);
@@ -424,6 +887,8 @@ ipcMain.handle('delete-bill', async (event, billId) => {
     });
 
     transaction(billId);
+    // ── Sync to Supabase ──
+    cloudSync.syncDeleteBill(billId);
     return { success: true };
   } catch (error) {
     console.error('Error deleting purchase bill:', error);
@@ -498,7 +963,68 @@ ipcMain.handle('update-bill', async (event, data) => {
     });
 
     transaction(billId, supplierName, supplierAddress || null, phone || null, email || null, invoiceNumber, billDate || null, dueDate || null, totalAmount, discount, paidAmount || 0, dueAmount || 0, billStatus, remarks || null, data.showRemarks ? 1 : 0, items);
-    return { success: true };
+
+    // ── Sync to Supabase (cloud) ──
+    cloudSync.syncSaveBill(billId, {
+      supplierName, supplierAddress, phone, email, invoiceNumber,
+      billDate, dueDate, totalAmount, discount, paidAmount, dueAmount,
+      status: billStatus, remarks, showRemarks: data.showRemarks
+    }, items);
+
+    // ── Sync ONLY NEW products to Shopify as DRAFT (skip existing ones) ──
+    // Compare old items vs new items — only sync products that are truly new
+    const oldProductNames = new Set(oldItems.map(it => it.product.trim().toLowerCase()));
+    const newOnlyItems = items.filter(it => !oldProductNames.has(it.product.trim().toLowerCase()));
+
+    let shopifyResult = { synced: false, reason: 'Not attempted' };
+
+    if (newOnlyItems.length > 0) {
+      console.log('[Shopify Sync] Bill update — found', newOnlyItems.length, 'NEW product(s) to sync:', newOnlyItems.map(i => i.product));
+      try {
+        shopifyResult = await syncBillProductsToShopifyDraft(supplierName, invoiceNumber, newOnlyItems);
+      } catch (shopifyErr) {
+        console.error('[Shopify Sync] Unexpected error:', shopifyErr);
+        shopifyResult = { synced: false, reason: shopifyErr.message };
+      }
+    } else {
+      console.log('[Shopify Sync] Bill update — no new products added, skipping Shopify sync.');
+      shopifyResult = { synced: true, successCount: 0, totalCount: 0, reason: 'No new products to sync' };
+    }
+
+    // Show native dialog with result so user can see what happened
+    try {
+      const { BrowserWindow } = require('electron');
+      const win = BrowserWindow.getFocusedWindow();
+      if (newOnlyItems.length === 0) {
+        // No new products — no dialog needed, just return silently
+      } else if (shopifyResult.synced && shopifyResult.successCount === shopifyResult.totalCount) {
+        dialog.showMessageBoxSync(win, {
+          type: 'info',
+          title: 'Shopify Sync Complete',
+          message: `✅ ${shopifyResult.successCount} NEW product(s) added to Shopify as Draft successfully!`
+        });
+      } else if (shopifyResult.synced) {
+        const failedDetails = (shopifyResult.results || [])
+          .filter(r => !r.success)
+          .map(r => `${r.product}: ${r.error}`)
+          .join('\n');
+        dialog.showMessageBoxSync(win, {
+          type: 'warning',
+          title: 'Shopify Sync Partial',
+          message: `${shopifyResult.successCount}/${shopifyResult.totalCount} products synced.\n\nErrors:\n${failedDetails}`
+        });
+      } else {
+        dialog.showMessageBoxSync(win, {
+          type: 'error',
+          title: 'Shopify Sync Failed',
+          message: `Shopify sync was not attempted.\nReason: ${shopifyResult.reason}`
+        });
+      }
+    } catch (dlgErr) {
+      console.error('[Shopify Sync] Dialog error:', dlgErr);
+    }
+
+    return { success: true, shopify: shopifyResult };
   } catch (error) {
     console.error('Error updating purchase bill:', error);
     return { success: false, error: error.message };
@@ -532,6 +1058,8 @@ ipcMain.handle('get-edit-password', async () => {
 ipcMain.handle('update-edit-password', async (event, newPassword) => {
   try {
     db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('edit_password', ?)").run(newPassword);
+    // ── Sync to Supabase ──
+    cloudSync.syncAppSetting('edit_password', newPassword);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -635,9 +1163,24 @@ ipcMain.handle('verify-otp', async (event, otp) => {
 });
 
 // Get analytics data for dashboard
-ipcMain.handle('get-analytics', async () => {
+ipcMain.handle('get-analytics', async (event, filter = {}) => {
   try {
-    // ─── Sales KPIs ─────────────────────────────────────
+    const { range = 'all', startDate, endDate } = filter;
+    let dateClause = '';
+    let params = [];
+
+    if (range === 'today') {
+      dateClause = "WHERE date(created_at) = date('now', 'localtime')";
+    } else if (range === 'week') {
+      dateClause = "WHERE created_at >= date('now', 'localtime', '-7 days')";
+    } else if (range === 'month') {
+      dateClause = "WHERE created_at >= date('now', 'localtime', '-30 days')";
+    } else if (range === 'custom' && startDate && endDate) {
+      dateClause = "WHERE date(created_at) BETWEEN ? AND ?";
+      params = [startDate, endDate];
+    }
+
+    // Dynamic queries with dateClause
     const salesStats = db.prepare(`
       SELECT 
         COUNT(*) as count,
@@ -647,9 +1190,9 @@ ipcMain.handle('get-analytics', async () => {
         COALESCE(SUM(due_amount), 0) as totalDue,
         COALESCE(SUM(paid_amount), 0) as totalPaid
       FROM sales_invoices
-    `).get();
+      ${dateClause}
+    `).get(...params);
 
-    // ─── Purchase KPIs ──────────────────────────────────
     const purchaseStats = db.prepare(`
       SELECT 
         COUNT(*) as count,
@@ -657,92 +1200,86 @@ ipcMain.handle('get-analytics', async () => {
         COALESCE(SUM(due_amount), 0) as totalDue,
         COALESCE(SUM(paid_amount), 0) as totalPaid
       FROM purchase_bills
-    `).get();
+      ${dateClause}
+    `).get(...params);
 
-    // ─── Unique Customers ───────────────────────────────
     const customerCount = db.prepare(`
       SELECT COUNT(DISTINCT LOWER(customer_name)) as count FROM sales_invoices
-    `).get();
+      ${dateClause}
+    `).get(...params);
 
-    // ─── Today's Revenue ────────────────────────────────
     const todayRevenue = db.prepare(`
       SELECT COALESCE(SUM(total_amount), 0) as total
       FROM sales_invoices
       WHERE date(created_at) = date('now', 'localtime')
     `).get();
 
-    // ─── This Month Revenue ─────────────────────────────
     const monthRevenue = db.prepare(`
       SELECT COALESCE(SUM(total_amount), 0) as total
       FROM sales_invoices
       WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'localtime')
     `).get();
 
-    // ─── Last Month Revenue (for growth calc) ───────────
     const lastMonthRevenue = db.prepare(`
       SELECT COALESCE(SUM(total_amount), 0) as total
       FROM sales_invoices
       WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'localtime', '-1 month')
     `).get();
 
-    // ─── Sales Trend (last 30 days) ─────────────────────
-    const salesTrend = db.prepare(`
+    // Sales Trend (range-aware)
+    let trendLimit = '-30 days';
+    if (range === 'today') trendLimit = '-1 day';
+    else if (range === 'week') trendLimit = '-7 days';
+    else if (range === 'month') trendLimit = '-30 days';
+    else if (range === 'custom') trendLimit = null; // We'll handle custom separately if needed
+
+    let trendQuery = `
       SELECT date(created_at) as date, SUM(total_amount) as total, COUNT(*) as count
       FROM sales_invoices
-      WHERE created_at >= date('now', 'localtime', '-30 days')
+      ${range === 'custom' ? dateClause : `WHERE created_at >= date('now', 'localtime', '${trendLimit}')`}
       GROUP BY date(created_at)
       ORDER BY date ASC
-    `).all();
+    `;
+    const salesTrend = db.prepare(trendQuery).all(...(range === 'custom' ? params : []));
 
-    // ─── Purchase Trend (last 30 days) ──────────────────
-    const purchaseTrend = db.prepare(`
+    let purchaseTrendQuery = `
       SELECT date(created_at) as date, SUM(total_amount) as total
       FROM purchase_bills
-      WHERE created_at >= date('now', 'localtime', '-30 days')
+      ${range === 'custom' ? dateClause : `WHERE created_at >= date('now', 'localtime', '${trendLimit}')`}
       GROUP BY date(created_at)
       ORDER BY date ASC
-    `).all();
+    `;
+    const purchaseTrend = db.prepare(purchaseTrendQuery).all(...(range === 'custom' ? params : []));
 
-    // ─── Top Products by Quantity ────────────────────────
     const topProducts = db.prepare(`
-      SELECT product, SUM(qty) as total_qty, SUM(qty * price) as total_revenue
-      FROM sales_items
-      GROUP BY LOWER(product)
+      SELECT si.product, SUM(si.qty) as total_qty, SUM(si.qty * si.price) as total_revenue
+      FROM sales_items si
+      JOIN sales_invoices s ON si.invoice_id = s.id
+      ${dateClause.replace('created_at', 's.created_at')}
+      GROUP BY LOWER(si.product)
       ORDER BY total_qty DESC
       LIMIT 10
-    `).all();
+    `).all(...params);
 
-    // ─── Top Customers by Spend ─────────────────────────
     const topCustomers = db.prepare(`
       SELECT customer_name, 
         SUM(total_amount) as total_spend, 
         COUNT(*) as invoice_count
       FROM sales_invoices
+      ${dateClause}
       GROUP BY LOWER(customer_name)
       ORDER BY total_spend DESC
       LIMIT 5
-    `).all();
+    `).all(...params);
 
-    // ─── Recent Invoices ────────────────────────────────
     const recentInvoices = db.prepare(`
       SELECT id, customer_name, invoice_number, total_amount, paid_amount, due_amount, created_at
       FROM sales_invoices
+      ${dateClause}
       ORDER BY id DESC
       LIMIT 20
-    `).all();
+    `).all(...params);
 
-    // ─── Monthly Breakdown (last 6 months) ──────────────
-    const monthlyBreakdown = db.prepare(`
-      SELECT strftime('%Y-%m', created_at) as month, 
-        SUM(total_amount) as revenue,
-        COUNT(*) as count
-      FROM sales_invoices
-      WHERE created_at >= date('now', 'localtime', '-6 months')
-      GROUP BY strftime('%Y-%m', created_at)
-      ORDER BY month ASC
-    `).all();
-
-    // ─── Calculate growth ───────────────────────────────
     const growth = lastMonthRevenue.total > 0
       ? ((monthRevenue.total - lastMonthRevenue.total) / lastMonthRevenue.total * 100)
       : (monthRevenue.total > 0 ? 100 : 0);
@@ -775,12 +1312,220 @@ ipcMain.handle('get-analytics', async () => {
         salesTrend,
         purchaseTrend,
         topProducts,
-        recentInvoices,
-        monthlyBreakdown
+        recentInvoices
       }
     };
   } catch (error) {
     console.error('Error fetching analytics:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get sales analytics for the Sales dashboard view (day-configurable)
+ipcMain.handle('get-sales-analytics', async (event, filter = {}) => {
+  try {
+    const { days = 0 } = filter;
+    let dateClause = '';
+    let dateClausePurchase = '';
+
+    if (days > 0) {
+      dateClause = `WHERE created_at >= date('now', 'localtime', '-${parseInt(days)} days')`;
+      dateClausePurchase = `WHERE created_at >= date('now', 'localtime', '-${parseInt(days)} days')`;
+    }
+
+    // KPI stats
+    const salesStats = db.prepare(`
+      SELECT 
+        COUNT(*) as count,
+        COALESCE(SUM(total_amount), 0) as revenue,
+        COALESCE(AVG(total_amount), 0) as avgValue,
+        COALESCE(SUM(due_amount), 0) as totalDue,
+        COALESCE(SUM(paid_amount), 0) as totalPaid
+      FROM sales_invoices
+      ${dateClause}
+    `).get();
+
+    const purchaseStats = db.prepare(`
+      SELECT 
+        COUNT(*) as count,
+        COALESCE(SUM(total_amount), 0) as totalSpend,
+        COALESCE(SUM(due_amount), 0) as totalDue,
+        COALESCE(SUM(paid_amount), 0) as totalPaid
+      FROM purchase_bills
+      ${dateClausePurchase}
+    `).get();
+
+    const todayRevenue = db.prepare(`
+      SELECT COALESCE(SUM(total_amount), 0) as total
+      FROM sales_invoices
+      WHERE date(created_at) = date('now', 'localtime')
+    `).get();
+
+    const monthRevenue = db.prepare(`
+      SELECT COALESCE(SUM(total_amount), 0) as total
+      FROM sales_invoices
+      WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'localtime')
+    `).get();
+
+    const lastMonthRevenue = db.prepare(`
+      SELECT COALESCE(SUM(total_amount), 0) as total
+      FROM sales_invoices
+      WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'localtime', '-1 month')
+    `).get();
+
+    const customerCount = db.prepare(`
+      SELECT COUNT(DISTINCT LOWER(customer_name)) as count FROM sales_invoices
+      ${dateClause}
+    `).get();
+
+    // Daily trends for revenue
+    const salesTrend = db.prepare(`
+      SELECT date(created_at) as date, SUM(total_amount) as total, COUNT(*) as count
+      FROM sales_invoices
+      ${dateClause}
+      GROUP BY date(created_at)
+      ORDER BY date ASC
+    `).all();
+
+    // Daily trends for purchases (to compute daily profit)
+    const purchaseTrend = db.prepare(`
+      SELECT date(created_at) as date, SUM(total_amount) as total
+      FROM purchase_bills
+      ${dateClausePurchase}
+      GROUP BY date(created_at)
+      ORDER BY date ASC
+    `).all();
+
+    // Top customers
+    const topCustomers = db.prepare(`
+      SELECT customer_name, SUM(total_amount) as total_spend, COUNT(*) as invoice_count
+      FROM sales_invoices
+      ${dateClause}
+      GROUP BY LOWER(customer_name)
+      ORDER BY total_spend DESC
+      LIMIT 5
+    `).all();
+
+    // Recent invoices (for CSV export)
+    const recentInvoices = db.prepare(`
+      SELECT id, customer_name, invoice_number, total_amount, paid_amount, due_amount, created_at
+      FROM sales_invoices
+      ${dateClause}
+      ORDER BY id DESC
+      LIMIT 50
+    `).all();
+
+    const growth = lastMonthRevenue.total > 0
+      ? ((monthRevenue.total - lastMonthRevenue.total) / lastMonthRevenue.total * 100)
+      : (monthRevenue.total > 0 ? 100 : 0);
+
+    return {
+      success: true,
+      data: {
+        sales: {
+          count: salesStats.count || 0,
+          revenue: salesStats.revenue || 0,
+          avgValue: salesStats.avgValue || 0,
+          totalDue: salesStats.totalDue || 0,
+          totalPaid: salesStats.totalPaid || 0,
+          todayRevenue: todayRevenue.total || 0,
+          monthRevenue: monthRevenue.total || 0,
+          growth: Math.round(growth * 10) / 10
+        },
+        purchases: {
+          count: purchaseStats.count || 0,
+          totalSpend: purchaseStats.totalSpend || 0,
+          totalDue: purchaseStats.totalDue || 0,
+          totalPaid: purchaseStats.totalPaid || 0
+        },
+        customers: {
+          uniqueCount: customerCount.count || 0,
+          top: topCustomers
+        },
+        profit: (salesStats.revenue || 0) - (purchaseStats.totalSpend || 0),
+        salesTrend,
+        purchaseTrend,
+        recentInvoices
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching sales analytics:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get product analytics for the Product Analytics dashboard view
+ipcMain.handle('get-product-analytics', async (event, filter = {}) => {
+  try {
+    const { days = 0, limit = 10, sortBy = 'qty' } = filter;
+    let dateClause = '';
+    let params = [];
+
+    if (days > 0) {
+      dateClause = `WHERE s.created_at >= date('now', 'localtime', '-${parseInt(days)} days')`;
+    }
+
+    const orderCol = sortBy === 'revenue' ? 'total_revenue' : 'total_qty';
+
+    const products = db.prepare(`
+      SELECT 
+        si.product,
+        SUM(si.qty) as total_qty,
+        SUM(si.qty * si.price) as total_revenue,
+        COUNT(DISTINCT s.id) as invoice_count,
+        MAX(s.created_at) as last_sold,
+        AVG(si.price) as avg_price
+      FROM sales_items si
+      JOIN sales_invoices s ON si.invoice_id = s.id
+      ${dateClause}
+      GROUP BY LOWER(si.product)
+      ORDER BY ${orderCol} DESC
+      LIMIT ?
+    `).all(limit);
+
+    // Also get totals for the summary cards
+    const totals = db.prepare(`
+      SELECT 
+        COUNT(DISTINCT LOWER(si.product)) as unique_products,
+        COALESCE(SUM(si.qty), 0) as total_units,
+        COALESCE(SUM(si.qty * si.price), 0) as total_revenue
+      FROM sales_items si
+      JOIN sales_invoices s ON si.invoice_id = s.id
+      ${dateClause}
+    `).get();
+
+    // Daily trend for the selected period (for the mini line chart)
+    let trendClause = '';
+    if (days > 0) {
+      trendClause = `WHERE s.created_at >= date('now', 'localtime', '-${parseInt(days)} days')`;
+    }
+    const dailyTrend = db.prepare(`
+      SELECT 
+        date(s.created_at) as date,
+        SUM(si.qty) as total_qty,
+        SUM(si.qty * si.price) as total_revenue,
+        COUNT(DISTINCT LOWER(si.product)) as unique_products
+      FROM sales_items si
+      JOIN sales_invoices s ON si.invoice_id = s.id
+      ${trendClause}
+      GROUP BY date(s.created_at)
+      ORDER BY date ASC
+    `).all();
+
+    return {
+      success: true,
+      data: {
+        products,
+        totals: {
+          uniqueProducts: totals.unique_products || 0,
+          totalUnits: totals.total_units || 0,
+          totalRevenue: totals.total_revenue || 0
+        },
+        dailyTrend
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching product analytics:', error);
     return { success: false, error: error.message };
   }
 });
@@ -918,6 +1663,21 @@ ipcMain.handle('open-purchase-bills-folder', async () => {
   }
 });
 
+// Show Item in Folder
+ipcMain.handle('show-item-in-folder', async (event, filePath) => {
+  try {
+    if (fs.existsSync(filePath)) {
+      shell.showItemInFolder(filePath);
+      return { success: true };
+    } else {
+      return { success: false, error: 'File not found: ' + filePath };
+    }
+  } catch (error) {
+    console.error('Error showing item in folder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Copy File to Clipboard
 ipcMain.handle('copy-file-to-clipboard', async (event, filePath) => {
   try {
@@ -1013,227 +1773,13 @@ function numberToWords(num) {
 
 // Download Invoice PDF
 ipcMain.handle('download-invoice-pdf', async (event, invoiceData) => {
-  return new Promise((resolve) => {
-    try {
-      const { customerName, items, invoiceNumber, phone, email, address, paidAmount = 0, dueAmount = 0 } = invoiceData;
-      const discountAmount = invoiceData.discountAmount !== undefined ? invoiceData.discountAmount : (invoiceData.discount || 0);
-
-      const sanitizedName = customerName.replace(/[<>:"/\\|?*]/g, '').trim() || 'Invoice';
-      const invNo = (invoiceNumber || 'NEW').toString().replace(/[<>:"/\\|?*]/g, '_').trim();
-      const filename = `Invoice_${invNo}_${sanitizedName}.pdf`;
-      const desktopPath = path.join(os.homedir(), 'Desktop');
-      const filePath = path.join(desktopPath, filename);
-
-      // Ensure directory exists
-      const fileDir = path.dirname(filePath);
-      if (!fs.existsSync(fileDir)) {
-        fs.mkdirSync(fileDir, { recursive: true });
-      }
-
-      const doc = new PDFDocument({
-        size: 'A4',
-        margin: 30,
-        bufferPages: true
-      });
-      const stream = fs.createWriteStream(filePath);
-      doc.pipe(stream);
-
-      const margin = 30;
-      const width = 535; // 595.28 - 60
-      const bottomY = 810;
-
-      // Outer Main Bounding Box
-      doc.lineWidth(1).strokeColor('#000').rect(margin, margin, width, bottomY - margin).stroke();
-
-      // Top Banner (TAX INVOICE)
-      doc.rect(margin, margin, width, 25).fillAndStroke('#2f5597', '#000');
-      doc.fillColor('#fff').fontSize(14).font('Helvetica-Bold').text('TAX INVOICE', margin, margin + 6, { width: width, align: 'center' });
-      doc.fontSize(8).text(`INVOICE NO : ${invNo}`, margin, margin + 4, { width: width - 5, align: 'right' });
-      const dateStr = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
-      doc.text(`DATE : ${dateStr}`, margin, margin + 14, { width: width - 5, align: 'right' });
-
-      // BUSINESS NAME Section
-      doc.fillColor('#000').fontSize(18).font('Helvetica-Bold').text('ASPORTS ZONE', margin, margin + 35, { width: width, align: 'center' });
-      doc.fontSize(10).font('Helvetica').text('2nd Rd, Gandhi Maidan, Sardarpura, Jodhpur, Rajasthan', margin, margin + 55, { width: width, align: 'center' });
-      doc.fontSize(9).text('GSTIN: 08GGVPM6232F1ZW', margin, margin + 68, { width: width, align: 'center' });
-      doc.text('Email ID: sportswallajodhpur@gmail.com', margin, margin + 79, { width: width, align: 'center' });
-      doc.text('Phone NO. +91 9256323239', margin, margin + 90, { width: width, align: 'center' });
-
-      // Horizontal line under Business Name
-      doc.moveTo(margin, 140).lineTo(margin + width, 140).stroke();
-
-      // Bill To Section (Left) & Payment Details (Right)
-      doc.rect(margin + width / 2, 140, width / 2, 80).fill('#e6f2ff'); // Light blue background for right side
-      doc.moveTo(margin + width / 2, 140).lineTo(margin + width / 2, 220).strokeColor('#000').stroke();
-
-      // Bill To Data
-      doc.fillColor('#000');
-      doc.font('Helvetica-Bold').fontSize(10).text('Bill To:', margin + 5, 145);
-      doc.text(customerName.toUpperCase(), margin + 5, 158);
-      doc.font('Helvetica').fontSize(9);
-      doc.text('ADDRESS:\n' + (address ? address : 'N/A'), margin + 5, 170, { width: (width / 2) - 10 });
-      if (email) doc.text('Email ID: ' + email, margin + 5, 195);
-      if (phone) doc.text('Phone: ' + phone, margin + 5, 205);
-
-      // Payment Details Data
-      const subTotalItems = items.reduce((sum, item) => sum + (item.qty * (item.price || item.rate || 0)), 0);
-      const totalGst = items.reduce((sum, item) => sum + (item.qty * (item.price || item.rate || 0) * ((item.gstPercent || item.gst_percent || 0) / 100)), 0);
-      const totalGrandAmount = subTotalItems + totalGst;
-      const rightX = margin + width / 2 + 5;
-      const rightSpan = (width / 2) - 10;
-
-      doc.text('Total Grand Amount:', rightX, 158);
-      doc.text(`${totalGrandAmount.toFixed(2)}`, rightX, 158, { width: rightSpan - 5, align: 'right' });
-
-      doc.text('Discount:', rightX, 171);
-      doc.text(`${(discountAmount || 0).toFixed(2)}`, rightX, 171, { width: rightSpan - 5, align: 'right' });
-
-      doc.text('Amount Paid:', rightX, 184);
-      doc.text(`${(paidAmount || 0).toFixed(2)}`, rightX, 184, { width: rightSpan - 5, align: 'right' });
-
-      const finalDue = totalGrandAmount - (discountAmount || 0) - (paidAmount || 0);
-      const dueY = 197;
-
-      if (finalDue > 0) {
-        // Yellow highlight for Due Amount
-        doc.rect(margin + width / 2 + 3, dueY - 4, (width / 2) - 10, 15).fill('#ffff00');
-        doc.fillColor('#000').font('Helvetica-Bold');
-        doc.text('Due Amount:', rightX, dueY);
-        doc.text(`${finalDue.toFixed(2)}`, rightX, dueY, { width: rightSpan - 5, align: 'right' });
-        doc.font('Helvetica');
-      } else {
-        doc.fillColor('#000').font('Helvetica');
-        doc.text('Due Amount:', rightX, dueY);
-        doc.text(`${finalDue.toFixed(2)}`, rightX, dueY, { width: rightSpan - 5, align: 'right' });
-      }
-
-      // Horizontal line before table headers
-      doc.moveTo(margin, 220).lineTo(margin + width, 220).stroke();
-
-      // Table Headers
-      const yHeaders = 220;
-      doc.moveTo(margin, 240).lineTo(margin + width, 240).stroke();
-
-      const colXs = [
-        margin,             // Description starts
-        margin + 200,       // HSN Code
-        margin + 260,       // Qty
-        margin + 310,       // Rate
-        margin + 380,       // GST %
-        margin + 440,       // Amount
-        margin + width      // End
-      ];
-
-      doc.font('Helvetica-Bold').fontSize(9);
-      doc.text('Description', colXs[0] + 5, yHeaders + 6);
-      doc.text('HSN Code', colXs[1] + 5, yHeaders + 6);
-      doc.text('Qty', colXs[2] + 5, yHeaders + 6, { width: colXs[3] - colXs[2] - 10, align: 'center' });
-      doc.text('Rate', colXs[3] + 5, yHeaders + 6, { width: colXs[4] - colXs[3] - 10, align: 'center' });
-      doc.text('GST %', colXs[4] + 5, yHeaders + 6, { width: colXs[5] - colXs[4] - 10, align: 'center' });
-      doc.text('Amount', colXs[5] + 5, yHeaders + 6, { width: colXs[6] - colXs[5] - 10, align: 'center' });
-
-      // Draw all vertical lines for the table all the way down to Total Row (y = 590)
-      const tableBottom = 610;
-      doc.moveTo(colXs[1], yHeaders).lineTo(colXs[1], tableBottom).stroke();
-      doc.moveTo(colXs[2], yHeaders).lineTo(colXs[2], tableBottom).stroke();
-      doc.moveTo(colXs[3], yHeaders).lineTo(colXs[3], tableBottom).stroke();
-      doc.moveTo(colXs[4], yHeaders).lineTo(colXs[4], tableBottom).stroke();
-      doc.moveTo(colXs[5], yHeaders).lineTo(colXs[5], tableBottom).stroke();
-
-      // Render Items
-      doc.font('Helvetica').fontSize(9);
-      let rowY = 245;
-
-      items.forEach((item, index) => {
-        const itemBaseTotal = item.qty * (item.price || item.rate || 0);
-        const gstPct = item.gstPercent || item.gst_percent || 0;
-        const itemGstAmt = itemBaseTotal * (gstPct / 100);
-        const total = itemBaseTotal + itemGstAmt;
-
-        doc.text(item.product, colXs[0] + 5, rowY, { width: colXs[1] - colXs[0] - 10 });
-        doc.text('-', colXs[1] + 5, rowY, { width: colXs[2] - colXs[1] - 10, align: 'center' });
-        doc.text(`${item.qty}`, colXs[2] + 5, rowY, { width: colXs[3] - colXs[2] - 10, align: 'center' });
-        const itemPrice = item.price || item.rate || 0;
-        doc.text(itemPrice.toFixed(2), colXs[3] + 5, rowY, { width: colXs[4] - colXs[3] - 10, align: 'right' });
-        doc.text(`${gstPct}%`, colXs[4] + 5, rowY, { width: colXs[5] - colXs[4] - 10, align: 'center' });
-        doc.text(itemBaseTotal.toFixed(2), colXs[5] + 5, rowY, { width: colXs[6] - colXs[5] - 10, align: 'right' });
-
-        rowY += 15;
-      });
-
-      // Draw Total Row at the bottom of the table
-      const footerY = tableBottom - 15;
-      doc.moveTo(margin, footerY).lineTo(margin + width, footerY).stroke();
-      doc.font('Helvetica-Bold').fontSize(9);
-      const totalQty = items.reduce((sum, it) => sum + it.qty, 0);
-      doc.text('Total', colXs[0] + 5, footerY + 4);
-      doc.text('-', colXs[1] + 5, footerY + 4, { width: colXs[2] - colXs[1] - 10, align: 'center' });
-      doc.text(`${totalQty}`, colXs[2] + 5, footerY + 4, { width: colXs[3] - colXs[2] - 10, align: 'center' });
-      doc.text(subTotalItems.toFixed(2), colXs[5] + 5, footerY + 4, { width: colXs[6] - colXs[5] - 10, align: 'right' });
-
-      // End of table section
-      const afterTableY = 610;
-      doc.moveTo(margin, afterTableY).lineTo(margin + width, afterTableY).stroke();
-
-      // Lower Section: Terms (Left) and Taxes/Totals (Right)
-      const midX = margin + 290;
-      doc.moveTo(midX, afterTableY).lineTo(midX, 690).stroke(); // vertical divider
-
-      // Left: Terms
-      doc.font('Helvetica-Bold').fontSize(9).text('Terms & conditions', margin + 5, afterTableY + 5);
-      doc.font('Helvetica').fontSize(8);
-      doc.text('Orders once confirmed cannot be canceled.', margin + 5, afterTableY + 18);
-      doc.text('No refunds will be processed under any circumstances.', margin + 5, afterTableY + 28);
-      doc.text('The provider is not liable for any indirect or consequential', margin + 5, afterTableY + 38);
-      doc.text('losses from the use of services/products.', margin + 5, afterTableY + 48);
-      doc.text("Subject to 'jodhpur' Jurisdiction only.", margin + 5, afterTableY + 58);
-
-      // Right: Taxes
-      doc.font('Helvetica-Bold').fontSize(9);
-      const rightPadding = 5;
-      const summarySpan = margin + width - midX - (rightPadding * 2);
-
-      const taxesY = afterTableY + 5;
-      // totalGst already calculated above
-
-      doc.text(`CGST :`, midX + rightPadding, taxesY);
-      doc.text((totalGst / 2).toFixed(2), midX + rightPadding, taxesY, { width: summarySpan, align: 'right' });
-      doc.text(`SGST :`, midX + rightPadding, taxesY + 12);
-      doc.text((totalGst / 2).toFixed(2), midX + rightPadding, taxesY + 12, { width: summarySpan, align: 'right' });
-
-      doc.moveTo(midX + 160, taxesY + 24).lineTo(margin + width - 5, taxesY + 24).stroke();
-
-      const netTotal = totalGrandAmount - (discountAmount || 0);
-
-      doc.text(`Total Tax :`, midX + rightPadding, taxesY + 28);
-      doc.text(totalGst.toFixed(2), midX + rightPadding, taxesY + 28, { width: summarySpan, align: 'right' });
-
-      doc.text(`Discount :`, midX + rightPadding, taxesY + 40);
-      doc.text((discountAmount || 0).toFixed(2), midX + rightPadding, taxesY + 40, { width: summarySpan, align: 'right' });
-
-      // Grand Total Box
-      doc.rect(midX, 672, margin + width - midX, 18).fillAndStroke('#2f5597', '#000');
-      doc.fillColor('#fff').text('Grand Total', midX + rightPadding, 677);
-      doc.text(netTotal.toFixed(2), midX + rightPadding, 677, { width: summarySpan, align: 'right' });
-
-      // Amount in Words Section
-      doc.fillColor('#000');
-      doc.moveTo(margin, 690).lineTo(margin + width, 690).stroke();
-      doc.font('Helvetica-Bold').fontSize(9).text('Total Amount (₹ - In Words) :', margin + 5, 695);
-      doc.font('Helvetica').fontSize(9).text(numberToWords(Math.round(netTotal)), margin + 145, 695);
-
-      // Business Signatory Section
-      doc.moveTo(margin, 730).lineTo(margin + width, 730).stroke();
-      doc.font('Helvetica-Bold').fontSize(10).text('For : ASPORTS ZONE', margin + 5, 740);
-      doc.font('Helvetica-Bold').fontSize(9).text('Authorised Signatory', margin + 5, bottomY - 15);
-
-      stream.on('finish', () => resolve({ success: true, filePath }));
-      doc.end();
-    } catch (error) {
-      console.error('PDF Error:', error);
-      resolve({ success: false, error: error.message });
-    }
-  });
+  try {
+    const filePath = await generateInvoicePDF(invoiceData);
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('PDF Error:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // Download Order PDF
@@ -1244,7 +1790,7 @@ ipcMain.handle('download-order-pdf', async (event, orderData) => {
 
       const sanitizedName = supplierName.replace(/[<>:"/\\|?*]/g, '').trim() || 'Order';
       const ordNo = (orderNumber || 'NEW').toString().padStart(4, '0').replace(/[<>:"/\\|?*]/g, '_').trim();
-      const filename = `Order_${ordNo}_${sanitizedName}.pdf`;
+      const filename = `Order_${ordNo}_${sanitizedName}_${Date.now()}.pdf`;
       const ordersPath = path.join(os.homedir(), 'Desktop', 'ASPORTS_ORDERS');
 
       const filePath = path.join(ordersPath, filename);
@@ -1366,7 +1912,7 @@ ipcMain.handle('read-order-pdf', async (event, filePath) => {
 });
 
 // ─── Extract Bill Data via Groq Vision AI ───────────────────
-const GROQ_API_KEY = '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';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 ipcMain.handle('ocr-bill-photo', async (event, imageSource) => {
   try {
@@ -1535,7 +2081,7 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
 
       const sanitizedName = (supplierName || 'Bill').replace(/[<>:"/\\|?*]/g, '').trim();
       const invNo = (invoiceNumber || 'NEW').toString().replace(/[<>:"/\\|?*]/g, '_').trim();
-      const filename = `PurchaseBill_${invNo}_${sanitizedName}.pdf`;
+      const filename = `PurchaseBill_${invNo}_${sanitizedName}_${Date.now()}.pdf`;
       const billsPath = path.join(os.homedir(), 'Desktop', 'ASPORTS_PURCHASE_BILLS');
 
       const filePath = path.join(billsPath, filename);
@@ -1603,27 +2149,44 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
         doc.text('Due Date:', margin + width / 2 + 5, 145);
         doc.text('N/A', margin + width / 2 + 5, 145, { width: rightBoxSpan, align: 'right' });
       }
-      
+
+      doc.text('Bill Date:', margin + width / 2 + 5, 155);
+      doc.text(dateStr, margin + width / 2 + 5, 155, { width: rightBoxSpan, align: 'right' });
+
+      const displayTotal = (totalAmount !== undefined && totalAmount !== null) ? totalAmount : calcGrand;
+      const displayDue = (dueAmount !== undefined && dueAmount !== null) ? dueAmount : calcDue;
+
+      if (dueDate) {
+        const dueDateStr = new Date(dueDate).toLocaleDateString('en-IN').replace(/\//g, '-');
+        doc.text('Due Date:', margin + width / 2 + 5, 145);
+        doc.text(dueDateStr, margin + width / 2 + 5, 145, { width: rightBoxSpan, align: 'right' });
+      } else {
+        doc.text('Due Date:', margin + width / 2 + 5, 145);
+        doc.text('N/A', margin + width / 2 + 5, 145, { width: rightBoxSpan, align: 'right' });
+      }
+
       doc.text('Bill Date:', margin + width / 2 + 5, 155);
       doc.text(dateStr, margin + width / 2 + 5, 155, { width: rightBoxSpan, align: 'right' });
 
       doc.text('Total Grand Amount:', margin + width / 2 + 5, 166);
-      doc.text('Rs. ' + calcGrand.toFixed(2), margin + width / 2 + 5, 166, { width: rightBoxSpan, align: 'right' });
-      
+      doc.text('Rs. ' + Number(displayTotal).toFixed(2), margin + width / 2 + 5, 166, { width: rightBoxSpan, align: 'right' });
+
       doc.text('Discount:', margin + width / 2 + 5, 177);
       doc.text('Rs. ' + (discount || 0).toFixed(2), margin + width / 2 + 5, 177, { width: rightBoxSpan, align: 'right' });
-      
+
       doc.text('Amount Paid:', margin + width / 2 + 5, 188);
       doc.text('Rs. ' + (paidAmount || 0).toFixed(2), margin + width / 2 + 5, 188, { width: rightBoxSpan, align: 'right' });
 
-      if (calcDue > 0) {
+      if (displayDue > 0) {
         // Yellow highlight for Due Amount
         doc.rect(margin + width / 2 + 3, 198, (width / 2) - 10, 15).fill('#ffff00');
         doc.fillColor('#000').font('Helvetica-Bold');
         doc.text('Due Amount:', margin + width / 2 + 5, 202);
-        doc.text('Rs. ' + calcDue.toFixed(2), margin + width / 2 + 5, 202, { width: rightBoxSpan, align: 'right' });
+        doc.text('Rs. ' + Number(displayDue).toFixed(2), margin + width / 2 + 5, 202, { width: rightBoxSpan, align: 'right' });
       } else {
-        doc.fillColor('#000').font('Helvetica-Bold').text('Paid in Full', margin + width / 2 + 5, 202, { width: rightBoxSpan, align: 'right' });
+        doc.fillColor('#000').font('Helvetica-Bold');
+        doc.text('Due Amount:', margin + width / 2 + 5, 202);
+        doc.text('Rs. 0.00', margin + width / 2 + 5, 202, { width: rightBoxSpan, align: 'right' });
       }
 
       // Horizontal line before table headers
@@ -1884,6 +2447,447 @@ async function shopifyFetch(url, token, retries = 3) {
   }
 }
 
+// Helper: POST to Shopify Admin API (for creating products)
+async function shopifyPost(url, token, body, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      console.log(`[Shopify POST] Attempt ${attempt}/${retries} — ${url}`);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      return response;
+    } catch (err) {
+      clearTimeout(timeout);
+      console.error(`[Shopify POST] Attempt ${attempt} failed:`, err.message || err);
+
+      if (attempt === retries) {
+        if (err.name === 'AbortError') {
+          throw new Error('Connection timed out — Shopify server did not respond within 15 seconds.');
+        }
+        if (err.message && err.message.includes('fetch failed')) {
+          throw new Error('Network error — Could not reach Shopify. Check your internet connection.');
+        }
+        throw err;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+    }
+  }
+}
+
+// Sync bill products to Shopify as DRAFT products
+async function syncBillProductsToShopifyDraft(supplierName, invoiceNumber, items) {
+  const domain = process.env.SHOPIFY_STORE_DOMAIN;
+  const token = process.env.SHOPIFY_ADMIN_API_TOKEN;
+  const version = process.env.SHOPIFY_API_VERSION || '2026-01';
+
+  console.log('[Shopify Sync] === Starting Shopify Draft Product Sync ===');
+  console.log('[Shopify Sync] Domain:', domain);
+  console.log('[Shopify Sync] Token:', token ? token.substring(0, 12) + '...' : 'MISSING');
+  console.log('[Shopify Sync] Version:', version);
+  console.log('[Shopify Sync] Supplier:', supplierName, '| Invoice:', invoiceNumber);
+  console.log('[Shopify Sync] Items count:', items.length);
+
+  if (!domain || !token) {
+    console.warn('[Shopify Sync] Skipped — API credentials not configured.');
+    return { synced: false, reason: 'Shopify API credentials not configured.' };
+  }
+
+  const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const url = `https://${cleanDomain}/admin/api/${version}/products.json`;
+  console.log('[Shopify Sync] URL:', url);
+
+  const results = [];
+
+  for (const item of items) {
+    try {
+      const gst = item.gstPercent || 0;
+      const baseTotal = (item.qty * item.rate).toFixed(2);
+      const gstAmount = (item.qty * item.rate * gst / 100).toFixed(2);
+
+      const productPayload = {
+        product: {
+          title: item.product,
+          body_html: `<p><strong>Supplier:</strong> ${supplierName}</p><p><strong>Invoice:</strong> ${invoiceNumber}</p><p><strong>Qty:</strong> ${item.qty} | <strong>Rate:</strong> ₹${Number(item.rate).toFixed(2)} | <strong>GST:</strong> ${gst}%</p><p><strong>Base Total:</strong> ₹${baseTotal} | <strong>GST Amount:</strong> ₹${gstAmount}</p>`,
+          vendor: supplierName,
+          product_type: '',
+          tags: `purchase-bill, invoice-${invoiceNumber}, gst-${gst}%, saved from billing update setup system`,
+          status: 'draft',
+          variants: [
+            {
+              price: Number(item.rate).toFixed(2),
+              sku: `BILL-${invoiceNumber}-${item.product.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20)}`,
+              taxable: gst > 0
+            }
+          ]
+        }
+      };
+
+      console.log(`[Shopify Sync] Creating draft product: "${item.product}" — payload:`, JSON.stringify(productPayload).substring(0, 300));
+      const response = await shopifyPost(url, token, productPayload);
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[Shopify Sync] FAILED for "${item.product}": HTTP ${response.status} — ${errText}`);
+        results.push({ product: item.product, success: false, error: `HTTP ${response.status}: ${errText.substring(0, 200)}` });
+      } else {
+        const data = await response.json();
+        console.log(`[Shopify Sync] SUCCESS — Created draft product ID: ${data.product.id} — "${item.product}"`);
+        results.push({ product: item.product, success: true, shopifyId: data.product.id });
+      }
+
+      // Small delay to avoid rate-limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (err) {
+      console.error(`[Shopify Sync] EXCEPTION for "${item.product}":`, err.message, err.stack);
+      results.push({ product: item.product, success: false, error: err.message });
+    }
+  }
+
+  const successCount = results.filter(r => r.success).length;
+  console.log(`[Shopify Sync] === Done — ${successCount}/${items.length} products synced as draft ===`);
+  return { synced: true, results, successCount, totalCount: items.length };
+}
+
+// Get all invoice IDs that were synced from Shopify
+ipcMain.handle('get-shopify-synced-invoice-ids', async () => {
+  try {
+    // Always read from local SQLite (it's always up-to-date since we write to both local + cloud)
+    const rows = db.prepare('SELECT invoice_id FROM shopify_synced_orders WHERE invoice_id IS NOT NULL').all();
+    return { success: true, invoiceIds: rows.map(r => r.invoice_id) };
+  } catch (error) {
+    console.error('Error fetching shopify synced invoice IDs:', error);
+    return { success: true, invoiceIds: [] };
+  }
+});
+
+// ─── Shopify Order Sync (Auto-fetch new orders → create invoices) ──────────
+
+let shopifyOrderPollInterval = null;
+
+async function fetchNewShopifyOrders() {
+  const domain = process.env.SHOPIFY_STORE_DOMAIN;
+  const token = process.env.SHOPIFY_ADMIN_API_TOKEN;
+  const version = process.env.SHOPIFY_API_VERSION || '2026-01';
+
+  if (!domain || !token) {
+    console.log('[Shopify Orders] Skipped — API credentials not configured.');
+    return;
+  }
+
+  const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+
+  try {
+    // Fetch recent orders (last 50, any financial status)
+    const url = `https://${cleanDomain}/admin/api/${version}/orders.json?status=any&limit=50&order=created_at+desc`;
+    console.log('[Shopify Orders] Polling for new orders...');
+    const response = await shopifyFetch(url, token);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[Shopify Orders] API error:', response.status, errText.substring(0, 200));
+      return;
+    }
+
+    const data = await response.json();
+    const orders = data.orders || [];
+    console.log(`[Shopify Orders] Fetched ${orders.length} orders from Shopify.`);
+
+    if (orders.length === 0) return;
+
+    // Prepared statements for NEW orders (local SQLite)
+    const checkSynced = db.prepare('SELECT shopify_order_id, invoice_id, shopify_updated_at FROM shopify_synced_orders WHERE shopify_order_id = ?');
+    const insertInvoice = db.prepare(
+      `INSERT INTO sales_invoices (customer_name, phone_number, email, billing_address, total_amount, invoice_number, paid_amount, due_amount, discount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const insertItem = db.prepare(
+      'INSERT INTO sales_items (invoice_id, product, qty, price, gst_percent) VALUES (?, ?, ?, ?, ?)'
+    );
+    const insertSyncRecord = db.prepare('INSERT INTO shopify_synced_orders (shopify_order_id, invoice_id, shopify_updated_at) VALUES (?, ?, ?)');
+
+    // Prepared statements for UPDATING existing invoices (local SQLite)
+    const updateInvoice = db.prepare(
+      `UPDATE sales_invoices SET customer_name = ?, phone_number = ?, email = ?, billing_address = ?, total_amount = ?, paid_amount = ?, due_amount = ?, discount = ? WHERE id = ?`
+    );
+    const deleteItems = db.prepare('DELETE FROM sales_items WHERE invoice_id = ?');
+    const updateSyncTimestamp = db.prepare('UPDATE shopify_synced_orders SET shopify_updated_at = ? WHERE shopify_order_id = ?');
+
+    // ── Helper: Check if order is synced (Supabase first, then local fallback) ──
+    async function checkIfSynced(shopifyOrderId) {
+      if (supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('shopify_synced_orders')
+            .select('shopify_order_id, invoice_id, shopify_updated_at')
+            .eq('shopify_order_id', shopifyOrderId)
+            .maybeSingle();
+          if (!error && data) return data;
+          if (!error && !data) {
+            // Not found in Supabase, check local as fallback
+            return checkSynced.get(shopifyOrderId) || null;
+          }
+        } catch (e) {
+          console.warn('[Supabase] Check failed, using local:', e.message);
+        }
+      }
+      return checkSynced.get(shopifyOrderId) || null;
+    }
+
+    // ── Helper: Save sync record to Supabase ──
+    async function saveSyncToSupabase(shopifyOrderId, invoiceId, shopifyUpdatedAt, orderData, lineItems) {
+      if (!supabase) return;
+      try {
+        // 1. Upsert sync record
+        await supabase
+          .from('shopify_synced_orders')
+          .upsert({
+            shopify_order_id: shopifyOrderId,
+            invoice_id: invoiceId,
+            shopify_updated_at: shopifyUpdatedAt
+          }, { onConflict: 'shopify_order_id' });
+
+        // 2. Upsert invoice copy
+        const { data: existingInv } = await supabase
+          .from('shopify_invoices')
+          .select('id')
+          .eq('shopify_order_id', shopifyOrderId)
+          .maybeSingle();
+
+        let supaInvoiceId;
+        if (existingInv) {
+          // Update existing
+          await supabase
+            .from('shopify_invoices')
+            .update({
+              local_invoice_id: invoiceId,
+              customer_name: orderData.customerName,
+              phone_number: orderData.phone,
+              email: orderData.email,
+              billing_address: orderData.address,
+              total_amount: orderData.totalAmount,
+              invoice_number: orderData.invoiceNumber,
+              paid_amount: orderData.paidAmount,
+              due_amount: orderData.dueAmount,
+              discount: orderData.discount
+            })
+            .eq('id', existingInv.id);
+          supaInvoiceId = existingInv.id;
+
+          // Delete old items and re-insert
+          await supabase
+            .from('shopify_invoice_items')
+            .delete()
+            .eq('shopify_invoice_id', supaInvoiceId);
+        } else {
+          // Insert new
+          const { data: newInv } = await supabase
+            .from('shopify_invoices')
+            .insert({
+              local_invoice_id: invoiceId,
+              shopify_order_id: shopifyOrderId,
+              customer_name: orderData.customerName,
+              phone_number: orderData.phone,
+              email: orderData.email,
+              billing_address: orderData.address,
+              total_amount: orderData.totalAmount,
+              invoice_number: orderData.invoiceNumber,
+              paid_amount: orderData.paidAmount,
+              due_amount: orderData.dueAmount,
+              discount: orderData.discount
+            })
+            .select('id')
+            .single();
+          supaInvoiceId = newInv?.id;
+        }
+
+        // 3. Insert line items
+        if (supaInvoiceId && lineItems.length > 0) {
+          const itemRows = lineItems.map(li => ({
+            shopify_invoice_id: supaInvoiceId,
+            product: li.product,
+            qty: li.qty,
+            price: li.price,
+            gst_percent: li.gst_percent
+          }));
+          await supabase.from('shopify_invoice_items').insert(itemRows);
+        }
+
+        console.log(`[Supabase] ✅ Synced order ${shopifyOrderId} to cloud`);
+      } catch (err) {
+        console.error(`[Supabase] ❌ Failed to sync order ${shopifyOrderId}:`, err.message);
+      }
+    }
+
+    let newCount = 0;
+    let updatedCount = 0;
+
+    for (const order of orders) {
+      const shopifyOrderId = String(order.id);
+      const shopifyUpdatedAt = order.updated_at || '';
+
+      // Check if already synced (Supabase first, then local)
+      const existing = await checkIfSynced(shopifyOrderId);
+
+      // ── Extract common order data ──
+      const customer = order.customer || {};
+      const shippingAddr = order.shipping_address || order.billing_address || {};
+      const customerName = customer.first_name && customer.last_name
+        ? `${customer.first_name} ${customer.last_name}`.trim()
+        : (shippingAddr.name || customer.email || `Shopify Order #${order.order_number}`);
+      const phone = customer.phone || shippingAddr.phone || '';
+      const email = customer.email || '';
+      const address = [shippingAddr.address1, shippingAddr.address2, shippingAddr.city, shippingAddr.province, shippingAddr.zip, shippingAddr.country]
+        .filter(Boolean).join(', ');
+
+      // Calculate totals
+      const totalAmount = parseFloat(order.total_price) || 0;
+      const paidAmount = (order.financial_status === 'paid' || order.financial_status === 'partially_paid')
+        ? totalAmount : 0;
+      const dueAmount = totalAmount - paidAmount;
+      const discount = parseFloat(order.total_discounts) || 0;
+
+      if (existing) {
+        // ── UPDATE existing invoice if Shopify order was modified ──
+        try {
+          const storedUpdatedAt = existing.shopify_updated_at || '';
+          if (storedUpdatedAt === shopifyUpdatedAt) {
+            // No changes since last sync
+            continue;
+          }
+
+          const invoiceId = existing.invoice_id;
+          if (!invoiceId) continue;
+
+          // Update invoice header (local)
+          updateInvoice.run(
+            customerName, phone, email, address,
+            totalAmount, paidAmount, dueAmount, discount,
+            invoiceId
+          );
+
+          // Replace line items (local)
+          deleteItems.run(invoiceId);
+          const lineItems = order.line_items || [];
+          const parsedItems = [];
+          for (const li of lineItems) {
+            const productName = li.title || li.name || 'Unknown Product';
+            const qty = li.quantity || 1;
+            const price = parseFloat(li.price) || 0;
+            const taxRate = (li.tax_lines && li.tax_lines.length > 0)
+              ? li.tax_lines.reduce((sum, t) => sum + (parseFloat(t.rate) || 0), 0) * 100
+              : 0;
+            insertItem.run(invoiceId, productName, qty, price, taxRate);
+            parsedItems.push({ product: productName, qty, price, gst_percent: taxRate });
+          }
+
+          // Update the stored timestamp (local)
+          updateSyncTimestamp.run(shopifyUpdatedAt, shopifyOrderId);
+          updatedCount++;
+
+          // ── Sync to Supabase (cloud) ──
+          const invRow = db.prepare('SELECT invoice_number FROM sales_invoices WHERE id = ?').get(invoiceId);
+          await saveSyncToSupabase(shopifyOrderId, invoiceId, shopifyUpdatedAt, {
+            customerName, phone, email, address,
+            totalAmount, paidAmount, dueAmount, discount,
+            invoiceNumber: invRow?.invoice_number
+          }, parsedItems);
+
+          console.log(`[Shopify Orders] 🔄 Updated invoice for order #${order.order_number} (Invoice ID: ${invoiceId})`);
+        } catch (updateErr) {
+          console.error(`[Shopify Orders] Failed to update order #${order.order_number}:`, updateErr.message);
+        }
+      } else {
+        // ── CREATE new invoice ──
+        try {
+          // Get next invoice number
+          const lastInv = db.prepare('SELECT MAX(invoice_number) as max_inv FROM sales_invoices').get();
+          const invoiceNumber = (lastInv && lastInv.max_inv && lastInv.max_inv >= 2026100001) ? lastInv.max_inv + 1 : 2026100001;
+
+          // Use Shopify order creation date
+          const createdAt = order.created_at
+            ? new Date(order.created_at).toISOString().replace('T', ' ').substring(0, 19)
+            : new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+          // Insert invoice (local)
+          const invResult = insertInvoice.run(
+            customerName, phone, email, address,
+            totalAmount, invoiceNumber, paidAmount, dueAmount, discount,
+            createdAt
+          );
+          const invoiceId = invResult.lastInsertRowid;
+
+          // Insert line items (local)
+          const lineItems = order.line_items || [];
+          const parsedItems = [];
+          for (const li of lineItems) {
+            const productName = li.title || li.name || 'Unknown Product';
+            const qty = li.quantity || 1;
+            const price = parseFloat(li.price) || 0;
+            const taxRate = (li.tax_lines && li.tax_lines.length > 0)
+              ? li.tax_lines.reduce((sum, t) => sum + (parseFloat(t.rate) || 0), 0) * 100
+              : 0;
+            insertItem.run(invoiceId, productName, qty, price, taxRate);
+            parsedItems.push({ product: productName, qty, price, gst_percent: taxRate });
+          }
+
+          // Mark as synced with the updated_at timestamp (local)
+          insertSyncRecord.run(shopifyOrderId, invoiceId, shopifyUpdatedAt);
+          newCount++;
+
+          // ── Sync to Supabase (cloud) ──
+          await saveSyncToSupabase(shopifyOrderId, invoiceId, shopifyUpdatedAt, {
+            customerName, phone, email, address,
+            totalAmount, paidAmount, dueAmount, discount,
+            invoiceNumber
+          }, parsedItems);
+
+          console.log(`[Shopify Orders] ✅ Synced order #${order.order_number} → Invoice #${invoiceNumber} (${customerName})`);
+        } catch (orderErr) {
+          console.error(`[Shopify Orders] Failed to sync order #${order.order_number}:`, orderErr.message);
+        }
+      }
+    }
+
+    if (newCount > 0 || updatedCount > 0) {
+      console.log(`[Shopify Orders] === ${newCount} new, ${updatedCount} updated order(s) synced ===`);
+      // Notify the renderer to refresh if it's on the invoice/customer page
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('shopify-orders-synced', { count: newCount, updated: updatedCount });
+      }
+    } else {
+      console.log('[Shopify Orders] No new or updated orders to sync.');
+    }
+  } catch (err) {
+    console.error('[Shopify Orders] Polling error:', err.message);
+  }
+}
+
+function startShopifyOrderPolling() {
+  // Run immediately on startup
+  console.log('[Shopify Orders] Starting order sync polling (every 2 minutes)...');
+  fetchNewShopifyOrders();
+
+  // Then poll every 2 minutes
+  shopifyOrderPollInterval = setInterval(fetchNewShopifyOrders, 2 * 60 * 1000);
+}
+
+function stopShopifyOrderPolling() {
+  if (shopifyOrderPollInterval) {
+    clearInterval(shopifyOrderPollInterval);
+    shopifyOrderPollInterval = null;
+  }
+}
+
 ipcMain.handle('shopify-search-products', async (event, { query, searchBy }) => {
   try {
     const domain = process.env.SHOPIFY_STORE_DOMAIN;
@@ -2114,43 +3118,73 @@ if (!gotTheLock) {
     try {
       createWindow();
 
-      // ─── Auto-Updater Setup ─────────────────────────────
-      autoUpdater.autoDownload = true;
-      autoUpdater.autoInstallOnAppQuit = true;
+      // ─── Auto-Updater Setup (Manual Logging) ─────────────
+      const updateLogPath = path.join(app.getPath('userData'), 'update.log');
+      const log = (msg) => {
+        const entry = `[${new Date().toISOString()}] ${msg}\n`;
+        fs.appendFileSync(updateLogPath, entry);
+        console.log(msg);
+      };
+
+      log('[ASPORTS] App starting...');
+
+      // Force dev-app-update.yml for debugging
+      if (!app.isPackaged) {
+        autoUpdater.updateConfigPath = path.join(__dirname, 'dev-app-update.yml');
+      }
+
+      autoUpdater.autoDownload = false;
+      autoUpdater.autoInstallOnAppQuit = false;
+
+      autoUpdater.on('checking-for-update', () => {
+        log('[ASPORTS] Checking for update...');
+      });
 
       autoUpdater.on('update-available', (info) => {
-        console.log('[ASPORTS] Update available:', info.version);
+        log(`[ASPORTS] Update available: ${info.version}`);
         if (mainWindow) {
-          mainWindow.webContents.send('update-status', { status: 'downloading', version: info.version });
+          mainWindow.webContents.send('update-status', { status: 'available', version: info.version });
+        }
+      });
+
+      autoUpdater.on('update-not-available', (info) => {
+        log('[ASPORTS] App is up-to-date.');
+      });
+
+      autoUpdater.on('download-progress', (progress) => {
+        log(`[ASPORTS] Download progress: ${Math.round(progress.percent)}%`);
+        if (mainWindow) {
+          mainWindow.webContents.send('update-status', {
+            status: 'downloading',
+            percent: Math.round(progress.percent)
+          });
         }
       });
 
       autoUpdater.on('update-downloaded', (info) => {
-        console.log('[ASPORTS] Update downloaded:', info.version);
+        log(`[ASPORTS] Update downloaded: ${info.version}`);
         if (mainWindow) {
           mainWindow.webContents.send('update-status', { status: 'ready', version: info.version });
         }
-        // Show a dialog and restart to apply the update
-        dialog.showMessageBox(mainWindow, {
-          type: 'info',
-          title: 'Update Ready',
-          message: `Version ${info.version} has been downloaded.`,
-          detail: 'The app will restart now to apply the update.',
-          buttons: ['Restart Now'],
-          defaultId: 0
-        }).then(() => {
-          autoUpdater.quitAndInstall(false, true);
-        });
       });
 
       autoUpdater.on('error', (err) => {
-        console.error('[ASPORTS] Auto-update error:', err);
+        log(`[ASPORTS] Auto-update error: ${err.message}`);
+        if (mainWindow) {
+          mainWindow.webContents.send('update-status', { status: 'error', message: err.message });
+        }
       });
 
-      // Check for updates (silently, no error dialogs for offline users)
-      autoUpdater.checkForUpdates().catch((err) => {
-        console.log('[ASPORTS] Update check skipped (offline or no release):', err.message);
-      });
+      // Check for updates on launch
+      autoUpdater.checkForUpdates();
+
+      // Re-check every 30 minutes
+      setInterval(() => {
+        autoUpdater.checkForUpdates();
+      }, 30 * 60 * 1000);
+
+      // ─── Start Shopify Order Sync ─────────────────────────
+      startShopifyOrderPolling();
 
     } catch (err) {
       console.error('[ASPORTS] Failed to create window:', err);
@@ -2160,6 +3194,7 @@ if (!gotTheLock) {
 
 
   app.on('window-all-closed', () => {
+    stopShopifyOrderPolling();
     if (process.platform !== 'darwin') {
       app.quit();
     }
