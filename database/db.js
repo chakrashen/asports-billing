@@ -177,9 +177,24 @@ db.exec(`
 // Seed defaults if not present
 const seedSetting = db.prepare('INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)');
 seedSetting.run('edit_password', 'asports@2026');
-// Config values — always update to match code on restart
+// Config values — always update to match code on restart from .env
 const updateSetting = db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)');
-updateSetting.run('registered_email', 'b24bs1541@iitj.ac.in');
-updateSetting.run('smtp_app_password', 'yvbu onko goez gdcq');
+updateSetting.run('registered_email', process.env.REGISTERED_EMAIL || '');
+updateSetting.run('smtp_app_password', process.env.SMTP_APP_PASSWORD || '');
+
+
+// ─── Shopify Order Sync Tracking ─────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shopify_synced_orders (
+    shopify_order_id TEXT PRIMARY KEY,
+    invoice_id INTEGER,
+    synced_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+`);
+
+// Migration: Add shopify_updated_at column to track Shopify order changes
+try {
+  db.exec("ALTER TABLE shopify_synced_orders ADD COLUMN shopify_updated_at TEXT");
+} catch (e) { }
 
 module.exports = db;
