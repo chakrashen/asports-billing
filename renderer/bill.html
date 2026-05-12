@@ -59,6 +59,66 @@
       transform: translateX(16px);
       background-color: var(--accent-emerald);
     }
+
+    /* Full Screen Loading Overlay */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 26, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s ease;
+    }
+    .loading-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .loading-overlay__content {
+      text-align: center;
+      animation: scale-in 0.4s var(--ease-spring);
+    }
+    .loading-overlay__spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(0, 229, 255, 0.1);
+      border-top: 4px solid var(--accent-cyan);
+      border-radius: 50%;
+      margin: 0 auto 20px;
+      animation: spin 1s linear infinite;
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+    }
+    .loading-overlay__title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .loading-overlay__text {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Sticky Header */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: rgba(10, 10, 26, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 15px 0 !important;
+      margin-bottom: 24px !important;
+      border-bottom: 1px solid var(--border-medium) !important;
+      -webkit-app-region: drag;
+    }
   </style>
 </head>
 <body>
@@ -264,7 +324,13 @@
           </div>
           <div class="form-group">
             <label for="paid-amount" class="form-label">Paid Amount (₹)</label>
-            <input type="number" id="paid-amount" class="form-input" placeholder="0.00" step="0.01" value="0" autocomplete="off" style="font-family: 'Outfit', sans-serif; font-weight: 600;">
+            <div class="payment-input-wrapper">
+              <input type="number" id="paid-amount" class="form-input" placeholder="0.00" step="0.01" value="0" autocomplete="off" style="font-family: 'Outfit', sans-serif; font-weight: 600; padding-right: 36px;">
+              <button type="button" id="btn-show-due" class="btn-input-icon" title="Fill remaining balance">
+                <span class="material-icons-round">arrow_drop_down</span>
+              </button>
+              <div id="due-badge" class="due-badge">0.00</div>
+            </div>
           </div>
           <div class="form-group">
             <label for="due-amount" class="form-label">Due Amount (₹)</label>
@@ -334,6 +400,15 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ─── Full Screen Loading Overlay ─── -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-overlay__content">
+      <div class="loading-overlay__spinner"></div>
+      <h3 class="loading-overlay__title">Saving Bill...</h3>
+      <p class="loading-overlay__text">Syncing products to Shopify drafts. Please wait.</p>
     </div>
   </div>
 

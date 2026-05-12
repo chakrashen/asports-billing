@@ -110,6 +110,9 @@ function addRow(product = '', qty = '', price = '') {
   qtyInput.addEventListener('input', () => updateRowTotal(tr));
   priceInput.addEventListener('input', () => updateRowTotal(tr));
   gstInput.addEventListener('input', () => updateRowTotal(tr));
+  
+  setupAutoClearZero(gstInput);
+  
   deleteBtn.addEventListener('click', () => removeRow(tr));
 
   // Product Suggestion Logic
@@ -255,9 +258,25 @@ function updateGrandTotal() {
   });
 }
 
-// Add event listener for real-time payment calculation
 document.getElementById('paid-amount').addEventListener('input', updateGrandTotal);
 document.getElementById('discount-amount').addEventListener('input', updateGrandTotal);
+
+function setupAutoClearZero(input) {
+  input.addEventListener('focus', () => {
+    if (input.value === '0' || input.value === '0.00' || input.value === '0.0') {
+      input.value = '';
+    }
+  });
+  input.addEventListener('blur', () => {
+    if (input.value === '') {
+      input.value = '0';
+      input.dispatchEvent(new Event('input'));
+    }
+  });
+}
+
+setupAutoClearZero(document.getElementById('discount-amount'));
+setupAutoClearZero(document.getElementById('paid-amount'));
 
 // ─── Fill Remaining Balance Logic ──────────────────────────
 const btnShowDue = document.getElementById('btn-show-due');
@@ -268,17 +287,17 @@ const dueTotalDisplay = document.getElementById('due-total');
 btnShowDue.addEventListener('click', (e) => {
   e.stopPropagation();
   const isVisible = dueBadge.classList.contains('show');
-  
+
   if (!isVisible) {
     // Get current due amount from the display text (remove ₹ and comma)
     const currentDueText = dueTotalDisplay.textContent.replace('₹ ', '').replace(/,/g, '');
     const currentDue = parseFloat(currentDueText) || 0;
-    
+
     if (currentDue <= 0) {
       showToast('No remaining balance to fill', 'error');
       return;
     }
-    
+
     dueBadge.textContent = currentDue.toFixed(2);
     dueBadge.classList.add('show');
   } else {
@@ -789,7 +808,7 @@ function resetDownloadBtn(btn) {
   btn.disabled = false;
   btn.style.width = '';
   btn.style.background = '';
-  btn.innerHTML = '<span class="material-icons-round">file_download</span> Download PDF';
+  btn.innerHTML = '<span class="material-icons-round">file_download</span>';
 }
 
 function resetForm() {
@@ -797,6 +816,8 @@ function resetForm() {
   document.getElementById('customer-phone').value = '';
   document.getElementById('customer-email').value = '';
   document.getElementById('customer-address').value = '';
+  document.getElementById('discount-amount').value = '';
+  document.getElementById('paid-amount').value = '';
   document.getElementById('invoice-body').innerHTML = '';
   rowId = 0;
   updateGrandTotal();

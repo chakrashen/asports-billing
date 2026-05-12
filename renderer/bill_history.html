@@ -750,125 +750,6 @@
       transform: translateY(-1px);
     }
 
-    /* ─── Notification Banner ─── */
-    #notif-banner {
-      display: none;
-      align-items: flex-start;
-      gap: 14px;
-      background: linear-gradient(135deg, rgba(244, 63, 94, 0.12), rgba(251, 146, 60, 0.08));
-      border: 1px solid rgba(244, 63, 94, 0.25);
-      border-radius: 14px;
-      padding: 16px 20px;
-      margin-bottom: 20px;
-      animation: pulse-border 2s ease-in-out infinite;
-    }
-
-    #notif-banner.show {
-      display: flex;
-    }
-
-    @keyframes pulse-border {
-
-      0%,
-      100% {
-        border-color: rgba(244, 63, 94, 0.25);
-        box-shadow: none;
-      }
-
-      50% {
-        border-color: rgba(244, 63, 94, 0.55);
-        box-shadow: 0 0 20px rgba(244, 63, 94, 0.12);
-      }
-    }
-
-    #notif-banner .notif-icon {
-      font-size: 28px;
-      color: var(--accent-rose);
-      flex-shrink: 0;
-      margin-top: 2px;
-      animation: bell-shake 2.5s ease-in-out infinite;
-    }
-
-    @keyframes bell-shake {
-
-      0%,
-      90%,
-      100% {
-        transform: rotate(0);
-      }
-
-      92% {
-        transform: rotate(-12deg);
-      }
-
-      94% {
-        transform: rotate(12deg);
-      }
-
-      96% {
-        transform: rotate(-8deg);
-      }
-
-      98% {
-        transform: rotate(8deg);
-      }
-    }
-
-    #notif-banner .notif-body {
-      flex: 1;
-    }
-
-    #notif-banner .notif-title {
-      font-weight: 800;
-      font-family: 'Outfit', sans-serif;
-      font-size: 1rem;
-      color: var(--text-primary);
-    }
-
-    #notif-banner .notif-items {
-      margin-top: 8px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    #notif-banner .notif-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 700;
-      font-family: 'Inter', sans-serif;
-    }
-
-    #notif-banner .notif-chip.overdue {
-      background: rgba(244, 63, 94, 0.15);
-      color: var(--accent-rose);
-      border: 1px solid rgba(244, 63, 94, 0.3);
-    }
-
-    #notif-banner .notif-chip.today {
-      background: rgba(251, 146, 60, 0.15);
-      color: var(--accent-orange);
-      border: 1px solid rgba(251, 146, 60, 0.3);
-    }
-
-    #notif-banner .notif-dismiss {
-      align-self: flex-start;
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: var(--text-muted);
-      font-size: 20px;
-      transition: color 0.2s ease;
-      padding: 2px;
-    }
-
-    #notif-banner .notif-dismiss:hover {
-      color: var(--text-primary);
-    }
 
     /* ─── Edit Modal Styles ─── */
     .edit-modal-overlay {
@@ -1930,7 +1811,6 @@
       gap: 20px;
     }
 
-    #notif-banner,
     .filter-row {
       flex-shrink: 0;
     }
@@ -2004,17 +1884,6 @@
     </header>
 
     <main class="history-main">
-      <!-- ─── Notification Banner ─── -->
-      <div id="notif-banner">
-        <span class="material-icons-round notif-icon">notifications_active</span>
-        <div class="notif-body">
-          <div class="notif-title">⚠️ Due Bill Alerts</div>
-          <div class="notif-items" id="notif-items"></div>
-        </div>
-        <button class="notif-dismiss" id="notif-dismiss" title="Dismiss">
-          <span class="material-icons-round">close</span>
-        </button>
-      </div>
 
       <div class="filter-row"
         style="flex-direction: row; justify-content: space-between; align-items: center; gap: 20px; background: rgba(255,255,255,0.03); padding: 16px 20px; border-radius: 12px; border: 1px solid var(--border-subtle);">

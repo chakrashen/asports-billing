@@ -64,6 +64,8 @@ function addRow(product = '', qty = '', rate = '', gst = '0') {
   qtyInput.addEventListener('input', () => recalcRow(tr));
   rateInput.addEventListener('input', () => recalcRow(tr));
   gstInput.addEventListener('input', () => recalcRow(tr));
+  
+  setupAutoClearZero(gstInput);
 }
 
 function recalcRow(tr) {
@@ -103,10 +105,66 @@ function recalcDue() {
   document.getElementById('due-amount').value = due.toFixed(2);
 }
 
-// Auto-calculate due amount when paid, total or discount changes
 document.getElementById('paid-amount').addEventListener('input', recalcDue);
 document.getElementById('discount-amount').addEventListener('input', recalculateTotals);
 document.getElementById('total-amount').addEventListener('input', recalcDue);
+
+function setupAutoClearZero(input) {
+  input.addEventListener('focus', () => {
+    if (input.value === '0' || input.value === '0.00' || input.value === '0.0') {
+      input.value = '';
+    }
+  });
+  input.addEventListener('blur', () => {
+    if (input.value === '') {
+      input.value = '0';
+      input.dispatchEvent(new Event('input'));
+    }
+  });
+}
+
+setupAutoClearZero(document.getElementById('discount-amount'));
+setupAutoClearZero(document.getElementById('paid-amount'));
+
+// ─── Fill Remaining Balance Logic ──────────────────────────
+const btnShowDue = document.getElementById('btn-show-due');
+const dueBadge = document.getElementById('due-badge');
+const paidInput = document.getElementById('paid-amount');
+const dueAmountInput = document.getElementById('due-amount');
+
+btnShowDue.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isVisible = dueBadge.classList.contains('show');
+  
+  if (!isVisible) {
+    const currentDue = parseFloat(dueAmountInput.value) || 0;
+    
+    if (currentDue <= 0) {
+      showToast('No remaining balance to fill', true);
+      return;
+    }
+    
+    dueBadge.textContent = currentDue.toFixed(2);
+    dueBadge.classList.add('show');
+  } else {
+    dueBadge.classList.remove('show');
+  }
+});
+
+dueBadge.addEventListener('click', () => {
+  const amount = parseFloat(dueBadge.textContent) || 0;
+  paidInput.value = amount.toFixed(2);
+  dueBadge.classList.remove('show');
+  recalcDue();
+  showToast(`Paid amount set to ₹ ${amount.toLocaleString('en-IN')}`);
+});
+
+// Hide badge when clicking anywhere else
+document.addEventListener('click', (e) => {
+  if (!dueBadge.contains(e.target) && e.target !== btnShowDue) {
+    dueBadge.classList.remove('show');
+  }
+});
 
 // Email auto-suffix logic
 document.getElementById('supplier-email').addEventListener('blur', (e) => {
@@ -159,6 +217,14 @@ function showToast(msg, isError = false) {
     icon.textContent = 'check_circle';
   }
   setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+function showLoading() {
+  document.getElementById('loading-overlay').classList.add('show');
+}
+
+function hideLoading() {
+  document.getElementById('loading-overlay').classList.remove('show');
 }
 
 // ─── Shared form data collection & validation ──────────────
@@ -234,13 +300,19 @@ document.getElementById('btn-save').addEventListener('click', async () => {
   const data = collectFormData();
   if (!data) return;
 
-  const result = await window.api.saveBill(data);
-  
-  if (result && result.success) {
-    showToast('Bill saved successfully!');
-    clearForm();
-  } else {
-    showToast('Save failed: ' + (result?.error || 'Unknown error'), true);
+  showLoading();
+  try {
+    const result = await window.api.saveBill(data);
+    if (result && result.success) {
+      showToast('Bill saved successfully!');
+      clearForm();
+    } else {
+      showToast('Save failed: ' + (result?.error || 'Unknown error'), true);
+    }
+  } catch (err) {
+    showToast('An unexpected error occurred: ' + err.message, true);
+  } finally {
+    hideLoading();
   }
 });
 
@@ -249,20 +321,27 @@ document.getElementById('btn-download-save').addEventListener('click', async () 
   const data = collectFormData();
   if (!data) return;
 
-  // Save to database first
-  const result = await window.api.saveBill(data);
-  
-  if (result && result.success) {
-    // Now generate and download the PDF
-    const pdfResult = await window.api.downloadBillPdf(data);
-    if (pdfResult && pdfResult.success) {
-      showToast('Bill saved & PDF downloaded!');
+  showLoading();
+  try {
+    // Save to database first
+    const result = await window.api.saveBill(data);
+    
+    if (result && result.success) {
+      // Now generate and download the PDF
+      const pdfResult = await window.api.downloadBillPdf(data);
+      if (pdfResult && pdfResult.success) {
+        showToast('Bill saved & PDF downloaded!');
+      } else {
+        showToast('Bill saved but PDF failed: ' + (pdfResult?.error || 'Unknown'), true);
+      }
+      clearForm();
     } else {
-      showToast('Bill saved but PDF failed: ' + (pdfResult?.error || 'Unknown'), true);
+      showToast('Save failed: ' + (result?.error || 'Unknown error'), true);
     }
-    clearForm();
-  } else {
-    showToast('Save failed: ' + (result?.error || 'Unknown error'), true);
+  } catch (err) {
+    showToast('An unexpected error occurred: ' + err.message, true);
+  } finally {
+    hideLoading();
   }
 });
 

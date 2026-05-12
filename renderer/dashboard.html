@@ -1,24 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard — ASPORTS ZONE</title>
   <link rel="stylesheet" href="../styles/global.css">
   <link rel="stylesheet" href="../styles/dashboard.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
+
 <body>
   <div class="bg-grid"></div>
   <div class="bg-glow bg-glow--1"></div>
   <div class="bg-glow bg-glow--2"></div>
   <div class="bg-glow bg-glow--3"></div>
 
-  <div class="app-container" style="max-width: 1400px;">
-    <!-- Header -->
-    <header class="header" id="app-header">
+  <div class="app-container" style="max-width: 100%; padding: 0 24px;">
+    <!-- Header (Sticky) -->
+    <header class="header header--sticky" id="app-header">
       <div class="header__left">
         <button class="btn-back" id="btn-back" title="Back to Home">
           <span class="material-icons-round">arrow_back</span>
@@ -37,131 +41,335 @@
       </div>
     </header>
 
-    <main class="dash-main">
-      <!-- Filters Bar -->
-      <div class="dash-filters">
-        <div class="dash-filters__left">
-          <span class="material-icons-round" style="font-size: 18px; color: var(--text-muted);">filter_list</span>
-          <button class="filter-chip active" data-range="all">All Time</button>
-          <button class="filter-chip" data-range="30">30 Days</button>
-          <button class="filter-chip" data-range="7">7 Days</button>
-          <button class="filter-chip" data-range="1">Today</button>
-        </div>
-        <div class="dash-filters__right">
-          <button class="btn-duedate" id="btn-duedate-view" title="Due Date View">
-            <span class="material-icons-round" style="font-size: 16px;">event_busy</span>
-            Due Date View
+    <!-- Layout: Sidebar + Content -->
+    <div class="dash-layout">
+      <!-- Sidebar -->
+      <aside class="dash-sidebar" id="dash-sidebar">
+        <!-- Hamburger inside sidebar -->
+        <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle Menu">
+          <span class="material-icons-round">menu</span>
+        </button>
+        <nav class="sidebar-nav">
+          <button class="sidebar-nav__item active" data-view="analytics" id="nav-analytics">
+            <span class="material-icons-round sidebar-nav__icon">point_of_sale</span>
+            <span class="sidebar-nav__label">Sales</span>
           </button>
-          <button class="btn-export" id="btn-export" title="Export CSV">
-            <span class="material-icons-round" style="font-size: 16px;">download</span>
-            Export
+          <button class="sidebar-nav__item" data-view="products" id="nav-products">
+            <span class="material-icons-round sidebar-nav__icon">inventory_2</span>
+            <span class="sidebar-nav__label">Products</span>
           </button>
-          <button class="btn-icon" id="btn-refresh" title="Refresh Data">
-            <span class="material-icons-round" style="font-size: 20px;">refresh</span>
+          <button class="sidebar-nav__item" data-view="duedate" id="nav-duedate">
+            <span class="material-icons-round sidebar-nav__icon">event_busy</span>
+            <span class="sidebar-nav__label">Dues</span>
           </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <span class="sidebar-version" id="app-version-text">v0.0.0</span>
+        </div>
+      </aside>
+
+      <!-- Content Area -->
+      <div class="dash-content" id="dash-content">
+        <!-- Analytics View (default) -->
+        <div class="dash-view" id="view-analytics">
+          <main class="dash-main">
+            <!-- Sales Controls Bar -->
+            <div class="sales-controls">
+              <div class="sales-controls__left">
+                <span class="material-icons-round" style="font-size: 22px; color: var(--accent-cyan);">point_of_sale</span>
+                <h2 class="sales-controls__title">Sales Analytics</h2>
+              </div>
+              <div class="sales-controls__right">
+                <!-- Days Filter -->
+                <div class="prod-filter-group">
+                  <label class="prod-filter-label">Time Range</label>
+                  <select id="sales-days-filter" class="prod-select">
+                    <option value="0">All Time</option>
+                    <option value="1">Last 1 Day</option>
+                    <option value="7">Last 7 Days</option>
+                    <option value="14">Last 14 Days</option>
+                    <option value="30" selected>Last 30 Days</option>
+                    <option value="60">Last 60 Days</option>
+                    <option value="90">Last 90 Days</option>
+                    <option value="180">Last 6 Months</option>
+                    <option value="365">Last 1 Year</option>
+                  </select>
+                </div>
+                <!-- Dataset Selector -->
+                <div class="prod-filter-group">
+                  <label class="prod-filter-label">Show on Graph</label>
+                  <select id="sales-dataset-filter" class="prod-select">
+                    <option value="both" selected>Revenue & Profit</option>
+                    <option value="revenue">Revenue Only</option>
+                    <option value="profit">Profit Only</option>
+                  </select>
+                </div>
+                <!-- Export -->
+                <button class="btn-export" id="btn-export" title="Export CSV">
+                  <span class="material-icons-round" style="font-size: 16px;">download</span>
+                  Export
+                </button>
+                <!-- Refresh -->
+                <button class="btn-icon" id="btn-refresh" title="Refresh Data">
+                  <span class="material-icons-round" style="font-size: 20px;">refresh</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Revenue & Profit Chart -->
+            <div class="sales-chart-card">
+              <div class="sales-chart-header">
+                <div class="sales-chart-title">
+                  <span class="material-icons-round" style="color: var(--accent-cyan);">show_chart</span>
+                  Revenue & Profit Trend
+                </div>
+                <div class="sales-chart-subtitle" id="sales-chart-subtitle">Last 30 Days · Revenue & Profit</div>
+              </div>
+              <div class="sales-chart-wrap">
+                <canvas id="chart-sales"></canvas>
+              </div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="kpi-grid">
+              <div class="kpi-card kpi-card--cyan">
+                <div class="kpi-card__header">
+                  <div class="kpi-card__icon-wrap">
+                    <span class="material-icons-round kpi-card__icon">account_balance_wallet</span>
+                  </div>
+                  <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-revenue-badge">—</span>
+                </div>
+                <div class="kpi-card__value" id="kpi-revenue">₹0</div>
+                <div class="kpi-card__label">Total Revenue</div>
+              </div>
+
+              <div class="kpi-card kpi-card--purple">
+                <div class="kpi-card__header">
+                  <div class="kpi-card__icon-wrap">
+                    <span class="material-icons-round kpi-card__icon">receipt_long</span>
+                  </div>
+                  <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-orders-badge">—</span>
+                </div>
+                <div class="kpi-card__value" id="kpi-orders">0</div>
+                <div class="kpi-card__label">Total Invoices</div>
+              </div>
+
+              <div class="kpi-card kpi-card--emerald">
+                <div class="kpi-card__header">
+                  <div class="kpi-card__icon-wrap">
+                    <span class="material-icons-round kpi-card__icon">trending_up</span>
+                  </div>
+                  <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-profit-badge">—</span>
+                </div>
+                <div class="kpi-card__value" id="kpi-profit">₹0</div>
+                <div class="kpi-card__label">Net Profit</div>
+              </div>
+
+              <div class="kpi-card kpi-card--rose">
+                <div class="kpi-card__header">
+                  <div class="kpi-card__icon-wrap">
+                    <span class="material-icons-round kpi-card__icon">warning_amber</span>
+                  </div>
+                  <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-pending-badge">—</span>
+                </div>
+                <div class="kpi-card__value" id="kpi-pending">₹0</div>
+                <div class="kpi-card__label">Pending Payments</div>
+              </div>
+            </div>
+
+
+          </main>
+        </div>
+
+        <!-- Due Date View (native calendar) -->
+        <div class="dash-view hidden" id="view-duedate">
+          <div class="duedate-split" id="duedate-split">
+            <!-- Left: Calendar -->
+            <div class="cal-panel">
+              <div class="cal-header">
+                <h3 class="cal-month" id="cal-month-year"></h3>
+                <div class="cal-nav">
+                  <button class="cal-nav-btn" id="btn-prev-month" title="Previous Month">
+                    <span class="material-icons-round">chevron_left</span>
+                  </button>
+                  <button class="cal-nav-btn" id="btn-next-month" title="Next Month">
+                    <span class="material-icons-round">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+              <div class="cal-grid" id="cal-grid">
+                <!-- Filled by JS -->
+              </div>
+              <div class="cal-legend">
+                <div class="cal-legend__item">
+                  <span class="cal-legend__dot cal-legend__dot--overdue"></span>
+                  <span>Overdue Bills</span>
+                </div>
+                <div class="cal-legend__item">
+                  <span class="cal-legend__dot cal-legend__dot--today"></span>
+                  <span>Due Today</span>
+                </div>
+                <div class="cal-legend__item">
+                  <span class="cal-legend__dot cal-legend__dot--upcoming"></span>
+                  <span>Upcoming Due</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Selected Date Bills -->
+            <div class="cal-due-panel">
+              <div class="cal-due-header">
+                <h3 class="cal-due-title" id="cal-due-title">
+                  <span class="material-icons-round" style="color: var(--accent-orange);">event_note</span>
+                  Today's Due
+                </h3>
+                <span class="cal-due-badge" id="cal-due-badge">0 Bills</span>
+              </div>
+              <div class="cal-due-list" id="cal-due-list">
+                <!-- Filled by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Product Analytics View -->
+        <div class="dash-view hidden" id="view-products">
+          <div class="dash-main">
+            <!-- Product Filter Controls -->
+            <div class="prod-controls">
+              <div class="prod-controls__left">
+                <span class="material-icons-round" style="font-size: 22px; color: var(--accent-purple);">inventory_2</span>
+                <h2 class="prod-controls__title">Product Analytics</h2>
+              </div>
+              <div class="prod-controls__right">
+                <!-- Days Filter -->
+                <div class="prod-filter-group">
+                  <label class="prod-filter-label">Time Range</label>
+                  <select id="prod-days-filter" class="prod-select">
+                    <option value="0">All Time</option>
+                    <option value="1">Last 1 Day</option>
+                    <option value="7" selected>Last 7 Days</option>
+                    <option value="14">Last 14 Days</option>
+                    <option value="30">Last 30 Days</option>
+                    <option value="60">Last 60 Days</option>
+                    <option value="90">Last 90 Days</option>
+                    <option value="180">Last 6 Months</option>
+                    <option value="365">Last 1 Year</option>
+                  </select>
+                </div>
+                <!-- Product Count -->
+                <div class="prod-filter-group">
+                  <label class="prod-filter-label">Show Products</label>
+                  <select id="prod-limit-filter" class="prod-select">
+                    <option value="5">Top 5</option>
+                    <option value="10" selected>Top 10</option>
+                    <option value="15">Top 15</option>
+                    <option value="20">Top 20</option>
+                    <option value="30">Top 30</option>
+                    <option value="50">Top 50</option>
+                  </select>
+                </div>
+                <!-- Sort By -->
+                <div class="prod-filter-group">
+                  <label class="prod-filter-label">Sort By</label>
+                  <select id="prod-sort-filter" class="prod-select">
+                    <option value="qty" selected>Quantity Sold</option>
+                    <option value="revenue">Revenue</option>
+                  </select>
+                </div>
+                <!-- Refresh -->
+                <button class="btn-icon" id="btn-prod-refresh" title="Refresh Product Data">
+                  <span class="material-icons-round" style="font-size: 20px;">refresh</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Product KPI Cards -->
+            <div class="prod-kpi-grid">
+              <div class="prod-kpi-card prod-kpi--purple">
+                <div class="prod-kpi__icon-wrap"><span class="material-icons-round">category</span></div>
+                <div class="prod-kpi__data">
+                  <div class="prod-kpi__value" id="prod-kpi-unique">0</div>
+                  <div class="prod-kpi__label">Unique Products</div>
+                </div>
+              </div>
+              <div class="prod-kpi-card prod-kpi--cyan">
+                <div class="prod-kpi__icon-wrap"><span class="material-icons-round">shopping_cart</span></div>
+                <div class="prod-kpi__data">
+                  <div class="prod-kpi__value" id="prod-kpi-units">0</div>
+                  <div class="prod-kpi__label">Total Units Sold</div>
+                </div>
+              </div>
+              <div class="prod-kpi-card prod-kpi--emerald">
+                <div class="prod-kpi__icon-wrap"><span class="material-icons-round">payments</span></div>
+                <div class="prod-kpi__data">
+                  <div class="prod-kpi__value" id="prod-kpi-revenue">₹0</div>
+                  <div class="prod-kpi__label">Product Revenue</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Product Bar Chart -->
+            <div class="prod-chart-card">
+              <div class="prod-chart-header">
+                <div class="prod-chart-title">
+                  <span class="material-icons-round" style="color: var(--accent-purple);">bar_chart</span>
+                  Products Sold
+                </div>
+                <div class="prod-chart-subtitle" id="prod-chart-subtitle">Top 10 · Last 7 Days</div>
+              </div>
+              <div class="prod-chart-wrap">
+                <canvas id="chart-product-analytics"></canvas>
+              </div>
+            </div>
+
+            <!-- Product Table + Trend -->
+            <div class="prod-bottom-grid">
+              <!-- Product Table -->
+              <div class="prod-table-card">
+                <div class="prod-table-header">
+                  <div class="prod-table-title">
+                    <span class="material-icons-round" style="color: var(--accent-orange);">format_list_numbered</span>
+                    Product Details
+                  </div>
+                </div>
+                <div class="prod-table-wrap">
+                  <table class="prod-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Product Name</th>
+                        <th style="text-align:right;">Qty Sold</th>
+                        <th style="text-align:right;">Revenue</th>
+                        <th style="text-align:right;">Avg Price</th>
+                        <th style="text-align:center;">Invoices</th>
+                      </tr>
+                    </thead>
+                    <tbody id="prod-table-body">
+                      <!-- Populated by JS -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Sales Trend Mini Chart -->
+              <div class="prod-trend-card">
+                <div class="prod-trend-header">
+                  <div class="prod-table-title">
+                    <span class="material-icons-round" style="color: var(--accent-cyan);">trending_up</span>
+                    Sales Trend
+                  </div>
+                </div>
+                <div class="prod-trend-wrap">
+                  <canvas id="chart-product-trend"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      <!-- KPI Cards -->
-      <div class="kpi-grid">
-        <div class="kpi-card kpi-card--cyan">
-          <div class="kpi-card__header">
-            <div class="kpi-card__icon-wrap">
-              <span class="material-icons-round kpi-card__icon">account_balance_wallet</span>
-            </div>
-            <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-revenue-badge">—</span>
-          </div>
-          <div class="kpi-card__value" id="kpi-revenue">₹0</div>
-          <div class="kpi-card__label">Total Revenue</div>
-        </div>
-
-        <div class="kpi-card kpi-card--purple">
-          <div class="kpi-card__header">
-            <div class="kpi-card__icon-wrap">
-              <span class="material-icons-round kpi-card__icon">receipt_long</span>
-            </div>
-            <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-orders-badge">—</span>
-          </div>
-          <div class="kpi-card__value" id="kpi-orders">0</div>
-          <div class="kpi-card__label">Total Invoices</div>
-        </div>
-
-        <div class="kpi-card kpi-card--emerald">
-          <div class="kpi-card__header">
-            <div class="kpi-card__icon-wrap">
-              <span class="material-icons-round kpi-card__icon">trending_up</span>
-            </div>
-            <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-profit-badge">—</span>
-          </div>
-          <div class="kpi-card__value" id="kpi-profit">₹0</div>
-          <div class="kpi-card__label">Net Profit</div>
-        </div>
-
-        <div class="kpi-card kpi-card--rose">
-          <div class="kpi-card__header">
-            <div class="kpi-card__icon-wrap">
-              <span class="material-icons-round kpi-card__icon">warning_amber</span>
-            </div>
-            <span class="kpi-card__badge kpi-card__badge--neutral" id="kpi-pending-badge">—</span>
-          </div>
-          <div class="kpi-card__value" id="kpi-pending">₹0</div>
-          <div class="kpi-card__label">Pending Payments</div>
-        </div>
-      </div>
-
-      <!-- Charts Row -->
-      <div class="charts-grid">
-        <div class="chart-card">
-          <div class="chart-card__header">
-            <div class="chart-card__title">
-              <span class="material-icons-round">show_chart</span>
-              Revenue Trend
-            </div>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="chart-revenue"></canvas>
-          </div>
-        </div>
-
-        <div class="chart-card">
-          <div class="chart-card__header">
-            <div class="chart-card__title">
-              <span class="material-icons-round" style="color: var(--accent-purple);">inventory_2</span>
-              Top Products
-            </div>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="chart-products"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Analytics Row -->
-      <div class="analytics-grid">
-        <!-- Top Customers -->
-        <div class="analytics-card">
-          <div class="analytics-card__title">
-            <span class="material-icons-round">group</span>
-            Top Customers
-          </div>
-          <div class="customer-list" id="customer-list">
-            <!-- Populated by JS -->
-          </div>
-        </div>
-
-        <!-- Financial Summary -->
-        <div class="analytics-card">
-          <div class="analytics-card__title">
-            <span class="material-icons-round" style="color: var(--accent-emerald);">pie_chart</span>
-            Financial Summary
-          </div>
-          <div class="financial-grid" id="financial-grid">
-            <!-- Populated by JS -->
-          </div>
-        </div>
-      </div>
-
-    </main>
+    </div>
   </div>
 
   <!-- Toast -->
@@ -172,4 +380,5 @@
 
   <script src="../scripts/dashboard.js"></script>
 </body>
+
 </html>

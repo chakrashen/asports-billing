@@ -3,17 +3,21 @@ let allDueBills = [];
 let currentStatus = 'pending';
 let currentModalBillId = null;
 let currentPdfPath = null;
-let notifDismissed = false;
 
 // Calendar State
 let calendarDate = new Date();
 let selectedDate = new Date();
+
+// Password Action State
+let pwAction = 'edit'; // 'edit' or 'allpaid'
 
 // Handle initial status from URL
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('status')) {
   currentStatus = urlParams.get('status');
 }
+
+
 
 function updateClock() {
   const now = new Date();
@@ -27,7 +31,7 @@ setInterval(updateClock, 1000);
 
 document.getElementById('btn-back').addEventListener('click', () => {
   if (currentStatus === 'duedate') {
-    window.location.href = 'dashboard.html';
+    window.location.href = 'home.html';
   } else {
     window.location.href = 'bill.html';
   }
@@ -102,7 +106,6 @@ async function loadDueBillsByDate(renderView = false) {
       renderDueDateView();
     }
     updateDueDateBadge();
-    showNotificationBanner();
   } else {
     console.error('Failed to load due bills by date:', result.error);
   }
@@ -124,11 +127,7 @@ function renderDueDateView() {
   const emptyDiv = document.getElementById('duedate-empty');
   const splitLayout = document.getElementById('duedate-split-layout');
 
-  if (allDueBills.length === 0) {
-    emptyDiv.style.display = 'block';
-    splitLayout.style.display = 'none';
-    return;
-  }
+  // Always show the calendar, even if there are no due bills
   emptyDiv.style.display = 'none';
   splitLayout.style.display = 'flex';
 
@@ -267,36 +266,6 @@ function updateDueDateBadge() {
   }
 }
 
-function showNotificationBanner() {
-  if (notifDismissed) return;
-  const banner = document.getElementById('notif-banner');
-  // Don't show banner when already in Due Date View — calendar shows everything
-  if (currentStatus === 'duedate') {
-    banner.classList.remove('show');
-    return;
-  }
-  const itemsDiv = document.getElementById('notif-items');
-
-  const overdueBills = allDueBills.filter(b => getDueCategory(b.due_date) === 'overdue');
-  const todayBills = allDueBills.filter(b => getDueCategory(b.due_date) === 'today');
-
-  if (overdueBills.length === 0 && todayBills.length === 0) {
-    banner.classList.remove('show');
-    return;
-  }
-
-  let chips = '';
-  if (overdueBills.length > 0) {
-    chips += `<span class="notif-chip overdue"><span class="material-icons-round" style="font-size:14px;">warning</span>${overdueBills.length} Overdue</span>`;
-  }
-  if (todayBills.length > 0) {
-    chips += `<span class="notif-chip today"><span class="material-icons-round" style="font-size:14px;">alarm</span>${todayBills.length} Due Today</span>`;
-  }
-
-  itemsDiv.innerHTML = chips;
-  banner.classList.add('show');
-}
-
 window.switchToDueDateView = function () {
   document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-duedate').classList.add('active');
@@ -306,11 +275,6 @@ window.switchToDueDateView = function () {
   try { document.getElementById('search-input').closest('.search-box').style.display = 'none'; } catch (e) { }
   loadDueBillsByDate(true);
 };
-
-document.getElementById('notif-dismiss').addEventListener('click', () => {
-  document.getElementById('notif-banner').classList.remove('show');
-  notifDismissed = true;
-});
 
 // ─── Mark Paid from Due Date View ────────────────────────────
 window.markPaidFromDue = async (e, id) => {
@@ -322,7 +286,6 @@ window.markPaidFromDue = async (e, id) => {
     allDueBills = allDueBills.filter(b => b.id !== id);
     renderDueDateView();
     updateDueDateBadge();
-    showNotificationBanner();
     showDueToast('Bill marked as paid!');
   } else {
     alert('Failed to mark as paid: ' + (result.error || 'Unknown'));
@@ -459,18 +422,61 @@ function updateModalDue(bill, items = []) {
   }
 }
 
-document.getElementById('btn-all-paid').addEventListener('click', async () => {
+document.getElementById('btn-all-paid').addEventListener('click', () => {
+  if (!currentModalBillId) return;
+
+  pwAction = 'allpaid';
+
+  // Show password modal
+  const overlay = document.getElementById('password-overlay');
+  const input = document.getElementById('pw-input');
+  const errorEl = document.getElementById('pw-error');
+  const subTitle = document.querySelector('.password-modal__sub');
+
+  input.value = '';
+  input.type = 'password';
+  document.getElementById('pw-toggle').querySelector('.material-icons-round').textContent = 'visibility_off';
+  errorEl.textContent = '';
+  if (subTitle) subTitle.textContent = 'Authentication required to mark as fully paid';
+  input.classList.remove('error');
+  overlay.classList.add('show');
+
+  setTimeout(() => input.focus(), 100);
+});
+
+async function processAllPaid() {
   if (!currentModalBillId) return;
   const result = await window.api.clearBillDues(currentModalBillId);
   if (result.success) {
-    const bill = allBills.find(b => b.id === currentModalBillId);
-    if (bill) { bill.due_amount = 0; updateModalDue(bill); }
-    allDueBills = allDueBills.filter(b => b.id !== currentModalBillId);
+    // Fetch fresh data from DB to ensure sync
+    const refreshResult = await window.api.getBills('paid'); // 'paid' returns all bills for history
+    if (refreshResult.success) {
+      const updatedBill = refreshResult.bills.find(b => b.id === currentModalBillId);
+      if (updatedBill) {
+        updateModalDue(updatedBill);
+
+        // Regenerate PDF with fresh data
+        showPdfLoading();
+        const itemsResult = await window.api.getBillItems(updatedBill.id);
+        if (itemsResult.success) {
+          const pdfResult = await generateBillPdf(updatedBill, itemsResult.items);
+          if (pdfResult && pdfResult.success) {
+            currentPdfPath = pdfResult.filePath;
+            await displayPdf(pdfResult.filePath);
+          }
+        }
+      }
+    }
+
+    // Update background lists
+    await loadBills();
+    await loadDueBillsByDate(false);
     updateDueDateBadge();
-    renderDueDateView();
-    renderBills(allBills);
+    showDueToast('Bill marked as paid!');
+  } else {
+    alert('Failed to mark as paid: ' + (result.error || 'Unknown error'));
   }
-});
+}
 
 
 
@@ -487,7 +493,25 @@ document.getElementById('btn-pdf-delete').addEventListener('click', async () => 
   }
 });
 
-document.getElementById('btn-pdf-download').addEventListener('click', () => { if (currentPdfPath) window.api.openPurchaseBillsFolder(); });
+document.getElementById('btn-pdf-download').addEventListener('click', async () => {
+  if (currentModalBillId) {
+    let bill = allBills.find(b => b.id === currentModalBillId);
+    if (!bill) bill = allDueBills.find(b => b.id === currentModalBillId);
+
+    if (bill) {
+      const pdfResult = await generateBillPdf(bill);
+      if (pdfResult && pdfResult.success) {
+        currentPdfPath = pdfResult.filePath;
+        await window.api.showItemInFolder(currentPdfPath);
+        showDueToast('PDF Downloaded successfully!');
+      } else {
+        alert('Failed to generate PDF.');
+      }
+    }
+  } else {
+    alert('Bill not found. Try viewing the detail again.');
+  }
+});
 document.getElementById('btn-pdf-close').addEventListener('click', () => {
   document.getElementById('pdf-modal').classList.remove('show');
   document.getElementById('remark-popover').classList.remove('show');
@@ -609,15 +633,19 @@ let currentEditPassword = 'asports@2026'; // fallback, loaded from DB below
 document.getElementById('btn-pdf-edit').addEventListener('click', () => {
   if (!currentModalBillId) return;
 
+  pwAction = 'edit';
+
   // Show password modal
   const overlay = document.getElementById('password-overlay');
   const input = document.getElementById('pw-input');
   const errorEl = document.getElementById('pw-error');
+  const subTitle = document.querySelector('.password-modal__sub');
 
   input.value = '';
   input.type = 'password';
   document.getElementById('pw-toggle').querySelector('.material-icons-round').textContent = 'visibility_off';
   errorEl.textContent = '';
+  if (subTitle) subTitle.textContent = 'Authentication required to edit this bill';
   input.classList.remove('error');
   overlay.classList.add('show');
 
@@ -651,18 +679,18 @@ document.getElementById('password-overlay').addEventListener('click', (e) => {
 
 // Password submit
 document.getElementById('pw-submit').addEventListener('click', () => {
-  verifyAndOpenEdit();
+  verifyPasswordAndExecute();
 });
 
 // Enter key on password input
 document.getElementById('pw-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
-    verifyAndOpenEdit();
+    verifyPasswordAndExecute();
   }
 });
 
-async function verifyAndOpenEdit() {
+async function verifyPasswordAndExecute() {
   const input = document.getElementById('pw-input');
   const errorEl = document.getElementById('pw-error');
 
@@ -677,8 +705,12 @@ async function verifyAndOpenEdit() {
   // Password correct — close password modal
   document.getElementById('password-overlay').classList.remove('show');
 
-  // Proceed to open the edit form
-  await openEditModal();
+  // Proceed to correct action
+  if (pwAction === 'edit') {
+    await openEditModal();
+  } else if (pwAction === 'allpaid') {
+    await processAllPaid();
+  }
 }
 
 async function openEditModal() {
@@ -898,66 +930,83 @@ document.getElementById('btn-edit-save').addEventListener('click', async () => {
     await loadBills();
     await loadDueBillsByDate(currentStatus === 'duedate');
     showDueToast('Bill updated successfully!');
+
+    // Show Shopify sync result
+    if (result.shopify && result.shopify.synced) {
+      const s = result.shopify;
+      if (s.successCount === s.totalCount) {
+        setTimeout(() => showDueToast(`✅ ${s.successCount} product(s) synced to Shopify as Draft`), 1200);
+      } else {
+        // Show detailed errors in alert
+        const failedItems = (s.results || []).filter(r => !r.success);
+        const errorDetails = failedItems.map(f => `• ${f.product}: ${f.error}`).join('\n');
+        setTimeout(() => {
+          alert(`Shopify Sync: ${s.successCount}/${s.totalCount} products synced.\n\nFailed items:\n${errorDetails}`);
+        }, 800);
+      }
+    } else if (result.shopify && !result.shopify.synced) {
+      setTimeout(() => alert(`Shopify sync skipped: ${result.shopify.reason || 'unknown'}`), 800);
+    } else {
+      setTimeout(() => alert('Shopify sync: No response received. Check console logs.'), 800);
+    }
   } else {
     alert('Failed to save changes: ' + (result.error || 'Unknown error'));
   }
 });
 
 // ─── Remark Popover Event Listeners ─────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  const remarkBtn = document.getElementById('btn-pdf-remark');
-  const remarkPopover = document.getElementById('remark-popover');
+const remarkBtn = document.getElementById('btn-pdf-remark');
+const remarkPopover = document.getElementById('remark-popover');
 
-  if (remarkBtn && remarkPopover) {
-    remarkBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      remarkPopover.classList.toggle('show');
-    });
+if (remarkBtn && remarkPopover) {
+  remarkBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    remarkPopover.classList.toggle('show');
+  });
 
-    // Close popover when clicking anywhere else
-    document.addEventListener('click', (e) => {
-      if (remarkPopover.classList.contains('show') && !remarkPopover.contains(e.target)) {
-        remarkPopover.classList.remove('show');
-      }
-    });
-
-    // Close button logic
-    const closePopoverBtn = document.getElementById('remark-popover-close');
-    if (closePopoverBtn) {
-      closePopoverBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        remarkPopover.classList.remove('show');
-      });
+  // Close popover when clicking anywhere else
+  document.addEventListener('click', (e) => {
+    if (remarkPopover.classList.contains('show') && !remarkPopover.contains(e.target)) {
+      remarkPopover.classList.remove('show');
     }
-  }
+  });
 
-  // ─── Change Log Event Listeners ──────────────────────────────
-  const changelogBtn = document.getElementById('btn-pdf-changelog');
-  const changelogOverlay = document.getElementById('changelog-overlay');
-  const changelogClose = document.getElementById('btn-changelog-close');
-
-  if (changelogBtn) {
-    changelogBtn.addEventListener('click', async () => {
-      if (!currentModalBillId) return;
-      await loadAndRenderChangelog(currentModalBillId);
-      changelogOverlay.classList.add('show');
+  // Close button logic
+  const closePopoverBtn = document.getElementById('remark-popover-close');
+  if (closePopoverBtn) {
+    closePopoverBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      remarkPopover.classList.remove('show');
     });
   }
+}
 
-  if (changelogClose) {
-    changelogClose.addEventListener('click', () => {
+// ─── Change Log Event Listeners ──────────────────────────────
+const changelogBtn = document.getElementById('btn-pdf-changelog');
+const changelogOverlay = document.getElementById('changelog-overlay');
+const changelogClose = document.getElementById('btn-changelog-close');
+
+if (changelogBtn) {
+  changelogBtn.addEventListener('click', async () => {
+    if (!currentModalBillId) return;
+    await loadAndRenderChangelog(currentModalBillId);
+    changelogOverlay.classList.add('show');
+  });
+}
+
+if (changelogClose) {
+  changelogClose.addEventListener('click', () => {
+    changelogOverlay.classList.remove('show');
+  });
+}
+
+if (changelogOverlay) {
+  changelogOverlay.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
       changelogOverlay.classList.remove('show');
-    });
-  }
-
-  if (changelogOverlay) {
-    changelogOverlay.addEventListener('click', (e) => {
-      if (e.target === e.currentTarget) {
-        changelogOverlay.classList.remove('show');
-      }
-    });
-  }
-});
+    }
+  });
+}
 
 // Load and render changelog for a bill
 async function loadAndRenderChangelog(billId) {

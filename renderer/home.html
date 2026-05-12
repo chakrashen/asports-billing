@@ -35,7 +35,13 @@
     <!-- Main Content -->
     <main class="home-main">
       <div class="hero">
-        <h2 class="hero__heading">Welcome Back<span class="hero__dot">.</span></h2>
+        <div class="hero__row">
+          <h2 class="hero__heading">Welcome Back<span class="hero__dot">.</span></h2>
+          <button class="bell-btn" id="btn-notifications" title="Notifications">
+            <span class="material-icons-round">notifications</span>
+            <span class="bell-badge" id="bell-badge" style="display:none;">0</span>
+          </button>
+        </div>
         <p class="hero__sub">Select a module to get started</p>
       </div>
 
@@ -121,6 +127,24 @@
 
 
     </main>
+  </div>
+
+  <!-- Notification Panel Overlay -->
+  <div class="notif-overlay" id="notif-overlay">
+    <div class="notif-panel" id="notif-panel">
+      <div class="notif-panel__header">
+        <div class="notif-panel__title">
+          <span class="material-icons-round" style="color: var(--accent-rose);">notifications_active</span>
+          <h3>Notifications</h3>
+        </div>
+        <button class="notif-panel__close" id="notif-close">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      <div class="notif-panel__body" id="notif-body">
+        <!-- Populated by JS -->
+      </div>
+    </div>
   </div>
 
   <script src="../scripts/home.js"></script>

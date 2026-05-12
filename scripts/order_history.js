@@ -146,8 +146,28 @@ window.deleteOrder = async (id) => {
 };
 
 // PDF Modal Actions
-document.getElementById('btn-pdf-download').addEventListener('click', () => {
-    if (currentPdfPath) window.api.openOrdersFolder();
+document.getElementById('btn-pdf-download').addEventListener('click', async () => {
+    if (currentOrder) {
+        const itemsResult = await window.api.getOrderItems(currentOrder.id);
+        if (itemsResult.success) {
+            const pdfResult = await window.api.downloadOrderPdf({
+                supplierName: currentOrder.supplier_name,
+                phone: currentOrder.phone_number,
+                email: currentOrder.email,
+                address: currentOrder.supplier_address,
+                orderId: currentOrder.id,
+                items: itemsResult.items
+            });
+
+            if (pdfResult && pdfResult.success) {
+                currentPdfPath = pdfResult.filePath;
+                await window.api.showItemInFolder(currentPdfPath);
+                showToast('PDF Downloaded successfully!');
+            } else {
+                showToast('Failed to generate PDF', 'error');
+            }
+        }
+    }
 });
 
 document.getElementById('btn-pdf-close').addEventListener('click', () => {

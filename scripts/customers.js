@@ -6,6 +6,7 @@ let allCustomers = []; // { name, invoices: [...], totalAmount, invoiceCount, la
 let currentFilter = 'all'; // 'all' or 'dues'
 let currentView = 'invoices'; // 'customers' or 'invoices'
 let currentEditingInvoiceId = null;
+let shopifySyncedIds = new Set();
 
 // ─── Clock ──────────────────────────────────────────────────
 function updateClock() {
@@ -103,6 +104,14 @@ async function loadCustomers() {
       return dateB - dateA;
     });
 
+    // Load Shopify-synced invoice IDs
+    try {
+      const syncResult = await window.api.getShopifySyncedInvoiceIds();
+      if (syncResult.success && syncResult.invoiceIds) {
+        shopifySyncedIds = new Set(syncResult.invoiceIds);
+      }
+    } catch (e) { console.error('Failed to load Shopify synced IDs:', e); }
+
     updateSummary(allCustomers, invoices);
     applyFilters();
   } catch (e) {
@@ -187,9 +196,10 @@ function renderInvoices(invoices) {
 
   container.innerHTML = `
     <div class="invoice-directory-table" style="width:100%; background: rgba(18, 20, 45, 0.4); border-radius: 16px; border: 1px solid var(--border-subtle); overflow: visible;">
-      <div class="table-header" style="display: grid; grid-template-columns: 140px 1fr 150px 140px 80px; padding: 18px 24px; background: #0d0d21; border-bottom: 1px solid var(--border-subtle); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 10; border-radius: 16px 16px 0 0;">
+      <div class="table-header" style="display: grid; grid-template-columns: 140px 1fr 100px 150px 140px 80px; padding: 18px 24px; background: #0d0d21; border-bottom: 1px solid var(--border-subtle); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 10; border-radius: 16px 16px 0 0;">
         <div>Invoice No.</div>
         <div>Customer Name</div>
+        <div style="text-align: center;">Source</div>
         <div style="text-align: right;">Amount</div>
         <div style="text-align: center;">Action</div>
         <div style="text-align: center;">Delete</div>
@@ -198,10 +208,13 @@ function renderInvoices(invoices) {
         ${invoices.map(inv => {
     const invNum = inv.invoice_number ? `#${inv.invoice_number}` : `#${inv.id}`;
     const amountStr = inv.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    const isShopify = shopifySyncedIds.has(inv.id);
+    const shopifyBadge = isShopify ? `<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(150,191,72,0.15);color:#96bf48;border:1px solid rgba(150,191,72,0.3);padding:2px 8px;border-radius:6px;font-size:0.65rem;font-weight:800;letter-spacing:0.03em;margin-right:8px;vertical-align:middle;"><svg width="12" height="12" viewBox="0 0 256 292" style="flex-shrink:0;"><path d="M223.8 57.5s-4.9-1.3-16.2 3.3c-5.4-15.4-14.9-29.6-31.6-29.6h-1.5c-4.7-6.1-10.6-8.8-15.7-8.8-38.8 0-57.5 48.5-63.3 73.2l-27.2 8.4c-8.5 2.7-8.8 2.9-9.9 10.9L42 241.7 168 268l72.5-15.6S223.9 57.8 223.8 57.5z" fill="#96bf48"/></svg>Shopify</span>` : '';
     return `
-            <div class="invoice-directory-row" style="display: grid; grid-template-columns: 140px 1fr 150px 140px 80px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center; transition: background 0.2s ease;">
+            <div class="invoice-directory-row" style="display: grid; grid-template-columns: 140px 1fr 100px 150px 140px 80px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center; transition: background 0.2s ease;">
               <div style="font-weight: 800; color: var(--accent-cyan); font-family: 'Outfit', sans-serif;">${invNum}</div>
               <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(inv.customer_name)}</div>
+              <div style="text-align: center;">${shopifyBadge}</div>
               <div style="text-align: right; font-weight: 700; color: var(--text-primary); font-family: 'Outfit', sans-serif;">₹ ${amountStr}</div>
               <div style="text-align: center;">
                 <button onclick="openInvoiceModal(${inv.id})" style="background: var(--accent-cyan-dim); color: var(--accent-cyan); border: 1px solid rgba(0, 229, 255, 0.2); padding: 6px 12px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; transition: all 0.2s ease;" onmouseover="this.style.background='var(--accent-cyan)'; this.style.color='#000'" onmouseout="this.style.background='var(--accent-cyan-dim)'; this.style.color='var(--accent-cyan)'">
@@ -678,11 +691,11 @@ async function openInvoiceModal(invoiceId) {
   const modal = document.getElementById('invoice-pdf-modal');
   const body = document.getElementById('invoice-pdf-modal-body');
   const loading = document.getElementById('invoice-pdf-loading');
-  
+
   modal.classList.add('show');
   loading.style.display = 'flex';
   body.querySelectorAll('embed').forEach(e => e.remove());
-  
+
   // Find invoice data
   let invoice = null;
   for (const cust of allCustomers) {
@@ -748,12 +761,50 @@ async function openInvoiceModal(invoiceId) {
 document.getElementById('btn-invoice-pdf-close').addEventListener('click', () => {
   document.getElementById('invoice-pdf-modal').classList.remove('show');
 });
+document.getElementById('btn-invoice-pdf-close-bottom').addEventListener('click', () => {
+  document.getElementById('invoice-pdf-modal').classList.remove('show');
+});
 document.getElementById('btn-invoice-pdf-back').addEventListener('click', () => {
   document.getElementById('invoice-pdf-modal').classList.remove('show');
 });
 
-document.getElementById('btn-invoice-pdf-download').addEventListener('click', () => {
-  window.api.openInvoicesFolder();
+document.getElementById('btn-invoice-pdf-download').addEventListener('click', async () => {
+  if (currentPdfInvoiceId) {
+    // Find invoice data
+    let invoice = null;
+    for (const cust of allCustomers) {
+      invoice = cust.invoices.find(i => i.id === currentPdfInvoiceId);
+      if (invoice) break;
+    }
+
+    if (invoice) {
+      const pdfResult = await window.api.downloadInvoicePdf({
+        customerName: invoice.customer_name,
+        phone: invoice.phone_number,
+        email: invoice.email,
+        address: invoice.billing_address,
+        invoiceNumber: invoice.invoice_number || invoice.id,
+        totalAmount: invoice.total_amount,
+        discount: invoice.discount || 0,
+        paidAmount: invoice.paid_amount || 0,
+        dueAmount: invoice.due_amount || 0,
+        items: invoice.items.map(item => ({
+          product: item.product,
+          qty: item.qty,
+          price: item.price,
+          gstPercent: item.gst_percent || 0
+        }))
+      });
+
+      if (pdfResult.success) {
+        currentPdfPath = pdfResult.filePath;
+        await window.api.showItemInFolder(currentPdfPath);
+        showToast('PDF Downloaded successfully!');
+      } else {
+        showToast('Failed to generate PDF: ' + pdfResult.error, true);
+      }
+    }
+  }
 });
 
 document.getElementById('btn-invoice-pdf-delete').addEventListener('click', async () => {
@@ -762,7 +813,7 @@ document.getElementById('btn-invoice-pdf-delete').addEventListener('click', asyn
     const result = await window.api.deleteInvoice(currentPdfInvoiceId);
     if (result.success) {
       document.getElementById('invoice-pdf-modal').classList.remove('show');
-      loadAllInvoices();
+      await loadCustomers();
     } else {
       alert('Error deleting invoice: ' + result.error);
     }
@@ -842,7 +893,7 @@ async function openInvoiceEditModal(invoiceId) {
         </tr>
       `;
     }).join('');
-    
+
     // Now convert them to inputs since we are in edit mode
     setInvoiceEditMode('edit');
   } else {
@@ -1088,3 +1139,11 @@ document.getElementById('btn-mark-paid').addEventListener('click', async () => {
 
 // ─── Init ───────────────────────────────────────────────────
 loadCustomers();
+
+// Auto-refresh when Shopify orders are synced or updated
+if (window.api.onShopifyOrdersSynced) {
+  window.api.onShopifyOrdersSynced((data) => {
+    console.log('[Shopify Sync] Orders synced/updated — refreshing customer list...', data);
+    loadCustomers();
+  });
+}

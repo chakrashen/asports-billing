@@ -23,7 +23,9 @@ contextBridge.exposeInMainWorld('api', {
   getBills: (status) => ipcRenderer.invoke('get-bills', status),
   getBillItems: (billId) => ipcRenderer.invoke('get-bill-items', billId),
   updateBillStatus: (billId, status) => ipcRenderer.invoke('update-bill-status', { billId, status }),
-  getAnalytics: () => ipcRenderer.invoke('get-analytics'),
+  getAnalytics: (filter) => ipcRenderer.invoke('get-analytics', filter),
+  getProductAnalytics: (filter) => ipcRenderer.invoke('get-product-analytics', filter),
+  getSalesAnalytics: (filter) => ipcRenderer.invoke('get-sales-analytics', filter),
   getNextInvoiceNumber: () => ipcRenderer.invoke('get-next-invoice-number'),
   updateCustomerDetails: (data) => ipcRenderer.invoke('update-customer-details', data),
   updateInvoiceItems: (invoiceId, items) => ipcRenderer.invoke('update-invoice-items', { invoiceId, items }),
@@ -53,6 +55,34 @@ contextBridge.exposeInMainWorld('api', {
   searchShopifyProducts: (query, searchBy) => ipcRenderer.invoke('shopify-search-products', { query, searchBy }),
   getShopifyProduct: (productId) => ipcRenderer.invoke('shopify-get-product', productId),
   getSupplierLedgers: () => ipcRenderer.invoke('get-supplier-ledgers'),
-  // Auto-update listener
-  onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, data) => callback(data))
+  getShopifySyncedInvoiceIds: () => ipcRenderer.invoke('get-shopify-synced-invoice-ids'),
+  showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  // Auto-update APIs
+  onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, data) => callback(data)),
+  removeUpdateListener: () => ipcRenderer.removeAllListeners('update-status'),
+  startUpdateDownload: () => ipcRenderer.invoke('start-update-download'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  // Shopify order sync listener
+  onShopifyOrdersSynced: (callback) => ipcRenderer.on('shopify-orders-synced', (event, data) => callback(data))
+});
+
+// ─── Global Font Ready Fix ───────────────────────────────────
+// This prevents icons from showing as text (ligatures) before 
+// the icon font is fully loaded.
+window.addEventListener('DOMContentLoaded', () => {
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      document.body.classList.add('fonts-loaded');
+    }).catch(() => {
+      document.body.classList.add('fonts-loaded');
+    });
+  } else {
+    document.body.classList.add('fonts-loaded');
+  }
+
+  // Fallback: Show everything after 1.5s regardless of font state
+  setTimeout(() => {
+    document.body.classList.add('fonts-loaded');
+  }, 1500);
 });
