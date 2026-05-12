@@ -110,6 +110,103 @@ ipcMain.handle('save-invoice', async (event, invoiceData) => {
   }
 });
 
+// ─── AI Sales Assistant ─────────────────────────────────────
+ipcMain.handle('ask-assistant', async (event, userQuery) => {
+  try {
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) throw new Error('Groq API Key not found in .env');
+
+    // 1. Get database schema for context
+    const schema = `
+      Tables:
+      - sales_invoices (id, customer_name, phone_number, total_amount, paid_amount, due_amount, invoice_number, created_at)
+      - sales_items (id, invoice_id, product, qty, price)
+      - purchase_bills (id, supplier_name, invoice_number, total_amount, paid_amount, due_amount, created_at)
+    `;
+
+    // 2. Ask AI to generate SQL
+    const sqlResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: `Generate ONLY a raw SQLite SELECT query. Schema: ${schema}. Date: ${new Date().toISOString()}` },
+          { role: 'user', content: userQuery }
+        ]
+      })
+    });
+
+    const sqlData = await sqlResponse.json();
+    let sql = sqlData.choices[0].message.content.trim().replace(/```sql|```/g, '');
+    
+    if (!sql.toUpperCase().startsWith('SELECT')) throw new Error('Unsafe query.');
+
+    // 3. Execute and Summarize
+    const results = db.prepare(sql).all();
+    const summaryResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: 'You are the ASPORTS Sales Assistant. Summarize these database results concisely.' },
+          { role: 'user', content: `Query: ${userQuery}. Results: ${JSON.stringify(results)}` }
+        ]
+      })
+    });
+
+    const summaryData = await summaryResponse.json();
+    return { success: true, answer: summaryData.choices[0].message.content };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ─── 80mm Thermal Printing ──────────────────────────────────
+ipcMain.handle('print-thermal-receipt', async (event, data) => {
+  try {
+    const printWin = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: true } });
+    
+    const itemsHtml = data.items.map(item => `
+      <tr>
+        <td style="padding: 2px 0;">${item.product}</td>
+        <td style="text-align: right;">${item.qty} x ${item.price}</td>
+      </tr>
+    `).join('');
+
+    const html = `
+      <html>
+        <body style="width: 80mm; font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 10px;">
+          <div style="text-align: center; font-weight: bold; font-size: 16px;">ASPORTS ZONE</div>
+          <div style="text-align: center; margin-bottom: 10px;">Tax Invoice</div>
+          <hr>
+          <div>Inv: #${data.invoiceNumber}</div>
+          <div>Date: ${new Date().toLocaleDateString()}</div>
+          <div>Cust: ${data.customerName}</div>
+          <hr>
+          <table style="width: 100%;">
+            ${itemsHtml}
+          </table>
+          <hr>
+          <div style="text-align: right; font-weight: bold;">Total: ₹${data.totalAmount}</div>
+          <div style="text-align: right;">Paid: ₹${data.paidAmount}</div>
+          <div style="text-align: right; color: red;">Due: ₹${data.dueAmount}</div>
+          <hr>
+          <div style="text-align: center; margin-top: 10px;">Thank You! Visit Again</div>
+        </body>
+      </html>
+    `;
+
+    await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    await printWin.webContents.print({ silent: false, printBackground: true });
+    printWin.close();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 // ─── Auto-Update IPC Handlers ──────────────────────────────
@@ -1329,8 +1426,10 @@ ipcMain.handle('get-sales-analytics', async (event, filter = {}) => {
     let dateClausePurchase = '';
 
     if (days > 0) {
-      dateClause = `WHERE created_at >= date('now', 'localtime', '-${parseInt(days)} days')`;
-      dateClausePurchase = `WHERE created_at >= date('now', 'localtime', '-${parseInt(days)} days')`;
+      dateClause = `WHERE created_at >= date('now', 'localtime', '-${parseInt(days)} days') AND total_amount < 10000000`;
+      dateClausePurchase = `WHERE COALESCE(NULLIF(bill_date, ''), created_at) >= date('now', 'localtime', '-${parseInt(days)} days')`;
+    } else {
+      dateClause = `WHERE total_amount < 10000000`;
     }
 
     // KPI stats
@@ -1359,18 +1458,21 @@ ipcMain.handle('get-sales-analytics', async (event, filter = {}) => {
       SELECT COALESCE(SUM(total_amount), 0) as total
       FROM sales_invoices
       WHERE date(created_at) = date('now', 'localtime')
+        AND total_amount < 10000000
     `).get();
 
     const monthRevenue = db.prepare(`
       SELECT COALESCE(SUM(total_amount), 0) as total
       FROM sales_invoices
       WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'localtime')
+        AND total_amount < 10000000
     `).get();
 
     const lastMonthRevenue = db.prepare(`
       SELECT COALESCE(SUM(total_amount), 0) as total
       FROM sales_invoices
       WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now', 'localtime', '-1 month')
+        AND total_amount < 10000000
     `).get();
 
     const customerCount = db.prepare(`
@@ -1389,12 +1491,38 @@ ipcMain.handle('get-sales-analytics', async (event, filter = {}) => {
 
     // Daily trends for purchases (to compute daily profit)
     const purchaseTrend = db.prepare(`
-      SELECT date(created_at) as date, SUM(total_amount) as total
+      SELECT date(COALESCE(NULLIF(bill_date, ''), created_at)) as date, SUM(total_amount) as total
       FROM purchase_bills
       ${dateClausePurchase}
-      GROUP BY date(created_at)
+      GROUP BY date
       ORDER BY date ASC
     `).all();
+
+    // Shopify vs App invoice breakdown
+    const shopifyInvoiceIds = db.prepare('SELECT invoice_id FROM shopify_synced_orders WHERE invoice_id IS NOT NULL').all().map(r => r.invoice_id);
+    const allInvoiceIds = db.prepare(`SELECT id FROM sales_invoices ${dateClause}`).all().map(r => r.id);
+    const shopifyCount = allInvoiceIds.filter(id => shopifyInvoiceIds.includes(id)).length;
+    const appCount = allInvoiceIds.length - shopifyCount;
+
+    // Today's invoice count
+    const todayInvoices = db.prepare(`
+      SELECT COUNT(*) as count FROM sales_invoices
+      WHERE date(created_at) = date('now', 'localtime')
+        AND total_amount < 10000000
+    `).get();
+
+    // This week revenue (for week-over-week comparison)
+    const thisWeekRevenue = db.prepare(`
+      SELECT COALESCE(SUM(total_amount), 0) as total FROM sales_invoices
+      WHERE created_at >= date('now', 'localtime', '-7 days')
+        AND total_amount < 10000000
+    `).get();
+    const lastWeekRevenue = db.prepare(`
+      SELECT COALESCE(SUM(total_amount), 0) as total FROM sales_invoices
+      WHERE created_at >= date('now', 'localtime', '-14 days')
+        AND created_at < date('now', 'localtime', '-7 days')
+        AND total_amount < 10000000
+    `).get();
 
     // Top customers
     const topCustomers = db.prepare(`
@@ -1419,6 +1547,11 @@ ipcMain.handle('get-sales-analytics', async (event, filter = {}) => {
       ? ((monthRevenue.total - lastMonthRevenue.total) / lastMonthRevenue.total * 100)
       : (monthRevenue.total > 0 ? 100 : 0);
 
+    // Week-over-week growth
+    const weekGrowth = lastWeekRevenue.total > 0
+      ? ((thisWeekRevenue.total - lastWeekRevenue.total) / lastWeekRevenue.total * 100)
+      : (thisWeekRevenue.total > 0 ? 100 : 0);
+
     return {
       success: true,
       data: {
@@ -1429,8 +1562,12 @@ ipcMain.handle('get-sales-analytics', async (event, filter = {}) => {
           totalDue: salesStats.totalDue || 0,
           totalPaid: salesStats.totalPaid || 0,
           todayRevenue: todayRevenue.total || 0,
+          todayCount: todayInvoices.count || 0,
           monthRevenue: monthRevenue.total || 0,
-          growth: Math.round(growth * 10) / 10
+          growth: Math.round(growth * 10) / 10,
+          weekGrowth: Math.round(weekGrowth * 10) / 10,
+          shopifyCount,
+          appCount
         },
         purchases: {
           count: purchaseStats.count || 0,

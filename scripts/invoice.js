@@ -628,6 +628,12 @@ document.getElementById('modal-save').addEventListener('click', async () => {
       btn.innerHTML = '<span class="material-icons-round">check</span>';
       btn.style.background = 'var(--gradient-emerald)';
 
+      // ─── Auto Thermal Print (background, non-blocking) ───
+      window.api.printThermalReceipt({
+        ...currentInvoiceData,
+        invoiceNumber: result.invoiceNumber
+      }).catch(err => console.error('Thermal print error:', err));
+
       setTimeout(() => {
         hideInvoiceModal();
         resetForm();
@@ -681,6 +687,12 @@ document.getElementById('modal-download').addEventListener('click', async () => 
       showToast(`Invoice #${result.invoiceId} saved & PDF downloaded!`, 'success');
       btn.innerHTML = '<span class="material-icons-round">check</span>';
       btn.style.background = 'var(--gradient-emerald)';
+
+      // ─── Auto Thermal Print (background, non-blocking) ───
+      window.api.printThermalReceipt({
+        ...currentInvoiceData,
+        invoiceNumber: result.invoiceNumber
+      }).catch(err => console.error('Thermal print error:', err));
 
       setTimeout(() => {
         hideInvoiceModal();

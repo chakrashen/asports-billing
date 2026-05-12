@@ -176,7 +176,7 @@ function getCalDueCategory(dateStr) {
 }
 
 // ─── Calendar: Select Date ──────────────────────────────────
-window.selectCalDate = function(dStr) {
+window.selectCalDate = function (dStr) {
   const parts = dStr.split('-');
   selDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
   renderCalendar();
@@ -289,16 +289,22 @@ function renderKPIs() {
   // Revenue
   animateValue(document.getElementById('kpi-revenue'), d.sales.revenue, '₹');
   const revBadge = document.getElementById('kpi-revenue-badge');
-  revBadge.textContent = `Today: ${formatCurrency(d.sales.todayRevenue)}`;
-  revBadge.className = 'kpi-card__badge kpi-card__badge--neutral';
+  const todayParts = [];
+  if (d.sales.todayRevenue > 0) todayParts.push(formatCurrency(d.sales.todayRevenue));
+  if (d.sales.todayCount > 0) todayParts.push(`${d.sales.todayCount} today`);
+  revBadge.textContent = todayParts.length > 0 ? `Today: ${todayParts.join(' · ')}` : 'No sales today';
+  revBadge.className = 'kpi-card__badge ' + (d.sales.todayRevenue > 0 ? 'kpi-card__badge--up' : 'kpi-card__badge--neutral');
 
-  // Orders
+  // Orders — show Shopify vs App breakdown
   animateValue(document.getElementById('kpi-orders'), d.sales.count);
   const ordBadge = document.getElementById('kpi-orders-badge');
-  ordBadge.textContent = `Avg: ${formatCurrency(d.sales.avgValue)}`;
+  const parts = [];
+  if (d.sales.shopifyCount > 0) parts.push(`🛒 ${d.sales.shopifyCount}`);
+  if (d.sales.appCount > 0) parts.push(`📱 ${d.sales.appCount}`);
+  ordBadge.textContent = parts.length > 0 ? parts.join(' · ') : `Avg: ${formatCurrency(d.sales.avgValue)}`;
   ordBadge.className = 'kpi-card__badge kpi-card__badge--neutral';
 
-  // Profit
+  // Profit — show month-over-month growth
   animateValue(document.getElementById('kpi-profit'), d.profit, '₹');
   const profitBadge = document.getElementById('kpi-profit-badge');
   if (d.sales.growth > 0) {
@@ -312,16 +318,42 @@ function renderKPIs() {
     profitBadge.className = 'kpi-card__badge kpi-card__badge--neutral';
   }
 
-  // Pending
-  const totalDue = (d.sales.totalDue || 0) + (d.purchases.totalDue || 0);
+  // Pending — show breakdown of sales due vs purchase due
+  const salesDue = d.sales.totalDue || 0;
+  const purchDue = d.purchases.totalDue || 0;
+  const totalDue = salesDue + purchDue;
   animateValue(document.getElementById('kpi-pending'), totalDue, '₹');
   const pendBadge = document.getElementById('kpi-pending-badge');
-  pendBadge.textContent = `${d.customers.uniqueCount} Customers`;
-  pendBadge.className = 'kpi-card__badge kpi-card__badge--neutral';
+  const dueParts = [];
+  if (salesDue > 0) dueParts.push(`Sales: ${formatCurrency(salesDue)}`);
+  if (purchDue > 0) dueParts.push(`Bills: ${formatCurrency(purchDue)}`);
+  pendBadge.textContent = dueParts.length > 0 ? dueParts.join(' · ') : `${d.customers.uniqueCount} Customers`;
+  pendBadge.className = 'kpi-card__badge ' + (totalDue > 0 ? 'kpi-card__badge--down' : 'kpi-card__badge--neutral');
 }
 
 // ─── Revenue & Profit Chart ─────────────────────────────────
 let salesChart = null;
+
+// ─── Helper: Fill date gaps with zero values ────────────────
+function fillDateGaps(sortedDates, dataMap) {
+  if (sortedDates.length < 2) return { dates: sortedDates, values: sortedDates.map(d => dataMap[d] || 0) };
+
+  const filledDates = [];
+  const filledValues = [];
+  const startDate = new Date(sortedDates[0]);
+  const endDate = new Date(sortedDates[sortedDates.length - 1]);
+
+  // Walk from startDate to endDate, one day at a time
+  const current = new Date(startDate);
+  while (current <= endDate) {
+    const dStr = current.toISOString().split('T')[0];
+    filledDates.push(dStr);
+    filledValues.push(dataMap[dStr] || 0);
+    current.setDate(current.getDate() + 1);
+  }
+
+  return { dates: filledDates, values: filledValues };
+}
 
 function renderSalesChart() {
   const ctx = document.getElementById('chart-sales').getContext('2d');
@@ -331,24 +363,35 @@ function renderSalesChart() {
   const purchases = analyticsData.purchaseTrend;
   const dataset = document.getElementById('sales-dataset-filter').value;
 
-  // Merge all dates
+  // Merge all dates from both sales and purchases
   const allDates = new Set();
   sales.forEach(s => allDates.add(s.date));
   purchases.forEach(p => allDates.add(p.date));
   const sortedDates = [...allDates].sort();
 
+  if (sortedDates.length === 0) {
+    salesChart = null;
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    return;
+  }
+
+  // Build lookup maps
   const salesMap = {};
   sales.forEach(s => salesMap[s.date] = s.total);
   const purchaseMap = {};
   purchases.forEach(p => purchaseMap[p.date] = p.total);
 
-  const labels = sortedDates.map(d => {
+  // Fill all date gaps so the chart shows real daily fluctuations
+  const filledSales = fillDateGaps(sortedDates, salesMap);
+  const filledPurchases = fillDateGaps(sortedDates, purchaseMap);
+
+  const labels = filledSales.dates.map(d => {
     const dt = new Date(d);
     return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
   });
 
-  const revenueData = sortedDates.map(d => salesMap[d] || 0);
-  const profitData = sortedDates.map(d => (salesMap[d] || 0) - (purchaseMap[d] || 0));
+  const revenueData = filledSales.values;
+  const profitData = filledSales.values.map((rev, i) => rev - (filledPurchases.values[i] || 0));
 
   const datasets = [];
 
@@ -357,11 +400,11 @@ function renderSalesChart() {
       label: 'Revenue',
       data: revenueData,
       borderColor: '#00e5ff',
-      backgroundColor: 'rgba(0, 229, 255, 0.08)',
-      borderWidth: 2.5,
+      backgroundColor: 'rgba(0, 229, 255, 0.12)',
+      borderWidth: 3,
       fill: true,
       tension: 0.4,
-      pointRadius: 3,
+      pointRadius: revenueData.length > 60 ? 0 : 3,
       pointBackgroundColor: '#00e5ff',
       pointBorderColor: '#0a0a1a',
       pointBorderWidth: 2,
@@ -373,17 +416,17 @@ function renderSalesChart() {
     datasets.push({
       label: 'Profit',
       data: profitData,
-      borderColor: '#34d399',
-      backgroundColor: 'rgba(52, 211, 153, 0.06)',
-      borderWidth: 2,
+      borderColor: '#ff9f43',
+      backgroundColor: 'rgba(255, 159, 67, 0.08)',
+      borderWidth: 2.5,
       fill: true,
       tension: 0.4,
-      pointRadius: 3,
-      pointBackgroundColor: '#34d399',
+      pointRadius: profitData.length > 60 ? 0 : 3,
+      pointBackgroundColor: '#ff9f43',
       pointBorderColor: '#0a0a1a',
       pointBorderWidth: 2,
       pointHoverRadius: 6,
-      borderDash: dataset === 'both' ? [6, 4] : []
+      borderDash: dataset === 'both' ? [5, 5] : []
     });
   }
 
@@ -416,7 +459,7 @@ function renderSalesChart() {
       scales: {
         x: {
           grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
-          ticks: { color: '#5a5e7e', font: { family: 'Inter', size: 10 }, maxTicksLimit: 12 },
+          ticks: { color: '#5a5e7e', font: { family: 'Inter', size: 10 }, maxTicksLimit: 12, maxRotation: 45 },
           border: { display: false }
         },
         y: {
@@ -558,6 +601,20 @@ function escapeHtml(text) {
 refreshTimer = setInterval(() => {
   loadDashboard();
 }, 120000);
+
+// ─── Auto-Refresh on Shopify Sync ───────────────────────────
+if (window.api.onShopifyOrdersSynced) {
+  window.api.onShopifyOrdersSynced((data) => {
+    console.log('[Dashboard] Shopify orders synced — refreshing dashboard...', data);
+    loadDashboard();
+    // Also refresh product analytics if that view is active
+    const prodView = document.getElementById('view-products');
+    if (prodView && !prodView.classList.contains('hidden')) {
+      loadProductAnalytics();
+    }
+    showToast(`Shopify: ${data.count || 0} new, ${data.updated || 0} updated orders synced`);
+  });
+}
 
 // ─── Add spin keyframe ──────────────────────────────────────
 const style = document.createElement('style');

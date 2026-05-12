@@ -64,7 +64,10 @@ contextBridge.exposeInMainWorld('api', {
   startUpdateDownload: () => ipcRenderer.invoke('start-update-download'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   // Shopify order sync listener
-  onShopifyOrdersSynced: (callback) => ipcRenderer.on('shopify-orders-synced', (event, data) => callback(data))
+  onShopifyOrdersSynced: (callback) => ipcRenderer.on('shopify-orders-synced', (event, data) => callback(data)),
+  // AI Assistant and Thermal Printing
+  askAssistant: (query) => ipcRenderer.invoke('ask-assistant', query),
+  printThermalReceipt: (data) => ipcRenderer.invoke('print-thermal-receipt', data)
 });
 
 // ─── Global Font Ready Fix ───────────────────────────────────
