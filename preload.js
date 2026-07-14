@@ -67,7 +67,68 @@ contextBridge.exposeInMainWorld('api', {
   onShopifyOrdersSynced: (callback) => ipcRenderer.on('shopify-orders-synced', (event, data) => callback(data)),
   // AI Assistant and Thermal Printing
   askAssistant: (query) => ipcRenderer.invoke('ask-assistant', query),
-  printThermalReceipt: (data) => ipcRenderer.invoke('print-thermal-receipt', data)
+  printThermalReceipt: (data) => ipcRenderer.invoke('print-thermal-receipt', data),
+  getLastProductGst: (productName) => ipcRenderer.invoke('get-last-product-gst', productName),
+  // ── Inventory Management APIs ─────────────────────────────
+  inventoryCreateProduct: (data) => ipcRenderer.invoke('inventory-create-product', data),
+  inventoryUpdateProduct: (data) => ipcRenderer.invoke('inventory-update-product', data),
+  inventoryGetProducts: (filters) => ipcRenderer.invoke('inventory-get-products', filters),
+  inventoryGetProduct: (productId) => ipcRenderer.invoke('inventory-get-product', productId),
+  inventorySearchProducts: (query) => ipcRenderer.invoke('inventory-search-products', query),
+  inventoryDeleteProduct: (productId) => ipcRenderer.invoke('inventory-delete-product', productId),
+  inventoryAddItem: (data) => ipcRenderer.invoke('inventory-add-item', data),
+  inventoryBulkAdd: (data) => ipcRenderer.invoke('inventory-bulk-add', data),
+  inventoryScanBarcode: (barcode) => ipcRenderer.invoke('inventory-scan-barcode', barcode),
+  inventoryUpdateItemStatus: (data) => ipcRenderer.invoke('inventory-update-item-status', data),
+  inventoryGetItems: (filters) => ipcRenderer.invoke('inventory-get-items', filters),
+  inventoryGetMovements: (filters) => ipcRenderer.invoke('inventory-get-movements', filters),
+  inventoryGetDashboard: () => ipcRenderer.invoke('inventory-get-dashboard'),
+  inventoryGetProductDetails: (productId) => ipcRenderer.invoke('inventory-get-product-details', productId),
+  inventoryBillScan: (barcode) => ipcRenderer.invoke('inventory-bill-scan', barcode),
+  inventoryMarkSold: (data) => ipcRenderer.invoke('inventory-mark-sold', data),
+  inventoryRestoreInvoice: (invoiceId) => ipcRenderer.invoke('inventory-restore-invoice', invoiceId),
+  inventoryReturnItem: (data) => ipcRenderer.invoke('inventory-return-item', data),
+  inventoryPurchaseScan: (data) => ipcRenderer.invoke('inventory-purchase-scan', data),
+  inventoryPurchaseBulk: (data) => ipcRenderer.invoke('inventory-bulk-add', data),
+  // ── Camera & CCTV Recording APIs ────────────────────────────
+  cctvGetCameras: () => ipcRenderer.invoke('cctv-get-cameras'),
+  cctvSaveCamera: (data) => ipcRenderer.invoke('cctv-save-camera', data),
+  cctvUpdateCamera: (data) => ipcRenderer.invoke('cctv-update-camera', data),
+  cctvDeleteCamera: (cameraId) => ipcRenderer.invoke('cctv-delete-camera', cameraId),
+  cctvGetCamera: (cameraId) => ipcRenderer.invoke('cctv-get-camera', cameraId),
+  cctvTestConnection: (data) => ipcRenderer.invoke('cctv-test-connection', data),
+  cctvStartStream: (data) => ipcRenderer.invoke('cctv-start-stream', data),
+  cctvStopStream: (streamId) => ipcRenderer.invoke('cctv-stop-stream', streamId),
+  cctvStartRecording: (data) => ipcRenderer.invoke('cctv-start-recording', data),
+  cctvStopRecording: (recordingId) => ipcRenderer.invoke('cctv-stop-recording', recordingId),
+  webcamSaveRecording: (data) => ipcRenderer.invoke('webcam-save-recording', data),
+  recordingGetAll: () => ipcRenderer.invoke('recording-get-all'),
+  recordingGetDetails: (id) => ipcRenderer.invoke('recording-get-details', id),
+  recordingDelete: (id) => ipcRenderer.invoke('recording-delete', id),
+  recordingGetFilePath: (id) => ipcRenderer.invoke('recording-get-file-path', id),
+  recordingOpenFolder: () => ipcRenderer.invoke('recording-open-folder'),
+  recordingReadFile: (filePath) => ipcRenderer.invoke('recording-read-file', filePath),
+  recordingGetByInvoice: (invoiceId) => ipcRenderer.invoke('recording-get-by-invoice', invoiceId),
+  // Wireless Phone APIs
+  wirelessStartServer: () => ipcRenderer.invoke('wireless-start-server'),
+  wirelessStopServer: () => ipcRenderer.invoke('wireless-stop-server'),
+  onWirelessFrame: (callback) => ipcRenderer.on('wireless-frame', (event, data) => callback(data)),
+  onWirelessStatus: (callback) => ipcRenderer.on('wireless-status', (event, data) => callback(data)),
+  onWirelessRecordTrigger: (callback) => ipcRenderer.on('wireless-record-trigger', (event, data) => callback(data)),
+  removeWirelessListeners: () => {
+    ipcRenderer.removeAllListeners('wireless-frame');
+    ipcRenderer.removeAllListeners('wireless-status');
+    ipcRenderer.removeAllListeners('wireless-record-trigger');
+  },
+  // CCTV stream event listeners
+  onCctvFrame: (callback) => ipcRenderer.on('cctv-frame', (event, data) => callback(data)),
+  onCctvStatus: (callback) => ipcRenderer.on('cctv-status', (event, data) => callback(data)),
+  onRecordingError: (callback) => ipcRenderer.on('recording-error', (event, data) => callback(data)),
+  removeCctvListeners: () => {
+    ipcRenderer.removeAllListeners('cctv-frame');
+    ipcRenderer.removeAllListeners('cctv-status');
+    ipcRenderer.removeAllListeners('recording-error');
+  }
 });
 
 // ─── Global Font Ready Fix ───────────────────────────────────

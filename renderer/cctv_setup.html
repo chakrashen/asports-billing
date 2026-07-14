@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CCTV Setup — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/camera.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+
+<body>
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+  <div class="bg-glow bg-glow--3"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">linked_camera</span>
+          <div>
+            <h1 class="header__title">CCTV / IP Camera Setup</h1>
+            <p class="header__subtitle">ASPORTS ZONE</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="cctv-setup-main">
+      <div class="cctv-grid">
+        <!-- Add/Edit Camera Form -->
+        <div class="cctv-form-section">
+          <div class="section__header">
+            <div class="section__header-left">
+              <span class="material-icons-round section__icon">add_circle</span>
+              <h2 class="section__title" id="form-title">Add New Camera</h2>
+            </div>
+          </div>
+
+          <div class="cctv-form-group">
+            <label for="cam-name">Camera Name</label>
+            <input type="text" id="cam-name" placeholder="e.g. Front Door Camera" maxlength="100">
+          </div>
+
+          <div class="cctv-form-group">
+            <label for="cam-rtsp-url">RTSP URL</label>
+            <input type="text" id="cam-rtsp-url" placeholder="rtsp://192.168.1.100:554/stream1">
+          </div>
+
+          <div class="cctv-form-group">
+            <label for="cam-username">Username <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+            <input type="text" id="cam-username" placeholder="admin" autocomplete="off">
+          </div>
+
+          <div class="cctv-form-group">
+            <label for="cam-password">Password <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+            <input type="password" id="cam-password" placeholder="••••••••" autocomplete="new-password">
+          </div>
+
+          <!-- Test connection result -->
+          <div class="cctv-test-result" id="test-result">
+            <span class="material-icons-round" id="test-result-icon">check_circle</span>
+            <span id="test-result-text">Connection successful</span>
+          </div>
+
+          <div class="cctv-form-actions">
+            <button class="btn btn--primary" id="btn-save-camera">
+              <span class="material-icons-round">save</span>
+              <span id="btn-save-text">Save Camera</span>
+            </button>
+            <button class="btn btn--secondary" id="btn-test-connection">
+              <span class="material-icons-round">wifi_tethering</span>
+              Test Connection
+            </button>
+            <button class="btn btn--secondary" id="btn-cancel-edit" style="display: none;">
+              <span class="material-icons-round">close</span>
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Saved Cameras List -->
+        <div class="cctv-list-section">
+          <div class="section__header">
+            <div class="section__header-left">
+              <span class="material-icons-round section__icon" style="color: var(--accent-purple);">videocam</span>
+              <h2 class="section__title">Saved Cameras</h2>
+            </div>
+          </div>
+
+          <div class="cctv-camera-list" id="camera-list">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Empty State -->
+          <div class="cctv-empty" id="camera-empty" style="display: none;">
+            <span class="material-icons-round">videocam_off</span>
+            <p style="font-weight: 600; margin-bottom: 4px; color: var(--text-secondary);">No Cameras Added</p>
+            <p>Add a CCTV or IP camera using the form to get started.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Delete Confirmation -->
+  <div class="confirm-overlay" id="confirm-overlay">
+    <div class="confirm-dialog">
+      <div class="confirm-dialog__icon">
+        <span class="material-icons-round">delete_forever</span>
+      </div>
+      <h3 class="confirm-dialog__title">Delete Camera?</h3>
+      <p class="confirm-dialog__msg" id="confirm-msg">This will remove the camera configuration. Existing recordings will not be deleted.</p>
+      <div class="confirm-dialog__actions">
+        <button class="btn btn--secondary" id="confirm-cancel">Cancel</button>
+        <button class="btn btn--primary" id="confirm-delete" style="background: linear-gradient(135deg, #f43f5e, #e11d48); box-shadow: 0 4px 20px rgba(244,63,94,0.25);">
+          <span class="material-icons-round">delete</span>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="cam-toast" id="cam-toast">
+    <span class="material-icons-round cam-toast__icon" id="toast-icon">check_circle</span>
+    <span id="toast-text">Done</span>
+  </div>
+
+  <script src="../scripts/cctv_setup.js"></script>
+</body>
+
+</html>

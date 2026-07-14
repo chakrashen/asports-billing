@@ -55,7 +55,7 @@ function createWindow() {
 ipcMain.handle('save-invoice', async (event, invoiceData) => {
   try {
     const { customerName, phone, email, address, items, paidAmount, dueAmount, discountAmount = 0 } = invoiceData;
-    const subTotal = items.reduce((sum, item) => sum + (item.qty * item.price * (1 + (item.gstPercent || 0) / 100)), 0);
+    const subTotal = items.reduce((sum, item) => sum + (item.qty * item.price), 0);
     const totalAmount = Math.max(0, subTotal - discountAmount);
 
     const insertInvoice = db.prepare(
@@ -75,6 +75,21 @@ ipcMain.handle('save-invoice', async (event, invoiceData) => {
 
       for (const item of items) {
         insertItem.run(invoiceId, item.product, item.qty, item.price, item.gstPercent || 0);
+      }
+
+      // Mark inventory items as SOLD if barcodes are provided
+      if (invoiceData.barcodes && invoiceData.barcodes.length > 0) {
+        const updateStatus = db.prepare("UPDATE inventory_items SET status = 'SOLD', sale_date = datetime('now','localtime'), invoice_id = ?, updated_at = datetime('now','localtime') WHERE id = ?");
+        const insertMovement = db.prepare("INSERT INTO inventory_movements (item_id, movement_type, reference_id, remarks, created_at) VALUES (?, 'SALE', ?, 'Billed via invoice', datetime('now','localtime'))");
+        const findItem = db.prepare("SELECT id FROM inventory_items WHERE barcode = ? AND status = 'IN_STOCK'");
+        
+        for (const barcode of invoiceData.barcodes) {
+          const invItem = findItem.get(barcode);
+          if (invItem) {
+            updateStatus.run(invoiceId, invItem.id);
+            insertMovement.run(invItem.id, invoiceId);
+          }
+        }
       }
 
       return { invoiceId, totalAmount };
@@ -165,44 +180,95 @@ ipcMain.handle('ask-assistant', async (event, userQuery) => {
 
 // ─── 80mm Thermal Printing ──────────────────────────────────
 ipcMain.handle('print-thermal-receipt', async (event, data) => {
+  console.log('[Thermal Print] Received data:', JSON.stringify(data, null, 2));
+  console.log('[Thermal Print] Handler triggered for Invoice:', data.invoiceNumber);
+  let printWin = null;
   try {
-    const printWin = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: true } });
+    printWin = new BrowserWindow({ 
+      show: true, // Make visible to ensure system print dialog is not blocked
+      width: 400,
+      height: 600,
+      title: 'Thermal Receipt Preview',
+      webPreferences: { 
+        nodeIntegration: true,
+        contextIsolation: false // Simpler for this temporary print window
+      } 
+    });
     
-    const itemsHtml = data.items.map(item => `
-      <tr>
-        <td style="padding: 2px 0;">${item.product}</td>
-        <td style="text-align: right;">${item.qty} x ${item.price}</td>
-      </tr>
-    `).join('');
+    const itemsHtml = (data.items || []).map(item => {
+      const total = item.qty * (item.price || item.rate || 0);
+      const effectiveGst = Math.max(5, item.gstPercent || item.gst_percent || 0);
+      const base = total / (1 + effectiveGst / 100);
+      return `
+        <tr>
+          <td style="padding: 2px 0;">${item.product}</td>
+          <td style="text-align: right;">${item.qty} x ${item.price}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const totalGst = (data.items || []).reduce((sum, item) => {
+      const total = item.qty * (item.price || item.rate || 0);
+      const effectiveGst = Math.max(5, item.gstPercent || item.gst_percent || 0);
+      const base = total / (1 + effectiveGst / 100);
+      return sum + (total - base);
+    }, 0);
+    const halfGst = totalGst / 2;
 
     const html = `
       <html>
-        <body style="width: 80mm; font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 10px;">
+        <head>
+          <style>
+            body { width: 80mm; font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 10px; background: #fff; color: #000; }
+            table { width: 100%; font-size: 11px; border-collapse: collapse; }
+            hr { border: none; border-top: 1px dashed #000; margin: 5px 0; }
+          </style>
+        </head>
+        <body>
           <div style="text-align: center; font-weight: bold; font-size: 16px;">ASPORTS ZONE</div>
           <div style="text-align: center; margin-bottom: 10px;">Tax Invoice</div>
           <hr>
-          <div>Inv: #${data.invoiceNumber}</div>
-          <div>Date: ${new Date().toLocaleDateString()}</div>
-          <div>Cust: ${data.customerName}</div>
+          <div style="font-size: 10px;">
+            <div>Inv: #${data.invoiceNumber || 'NEW'}</div>
+            <div>Date: ${new Date().toLocaleDateString()}</div>
+            <div>Cust: ${data.customerName || 'N/A'}</div>
+          </div>
           <hr>
-          <table style="width: 100%;">
+          <table>
             ${itemsHtml}
           </table>
           <hr>
-          <div style="text-align: right; font-weight: bold;">Total: ₹${data.totalAmount}</div>
-          <div style="text-align: right;">Paid: ₹${data.paidAmount}</div>
-          <div style="text-align: right; color: red;">Due: ₹${data.dueAmount}</div>
+          <div style="text-align: right;">Subtotal: ₹${(Number(data.totalAmount || 0) - totalGst + Number(data.discountAmount || 0)).toFixed(2)}</div>
+          <div style="text-align: right;">CGST: ₹${halfGst.toFixed(2)}</div>
+          <div style="text-align: right;">SGST: ₹${halfGst.toFixed(2)}</div>
+          <div style="text-align: right; font-weight: bold; font-size: 14px; margin-top: 5px;">Total: ₹${Number(data.totalAmount || 0).toFixed(2)}</div>
+          <div style="text-align: right;">Paid: ₹${Number(data.paidAmount || 0).toFixed(2)}</div>
+          <div style="text-align: right; font-weight: bold;">Due: ₹${Number(data.dueAmount || 0).toFixed(2)}</div>
           <hr>
           <div style="text-align: center; margin-top: 10px;">Thank You! Visit Again</div>
+          <div style="text-align: center; font-size: 9px; color: #666; margin-top: 5px;">GSTIN: 08GGVPM6232F1ZW</div>
         </body>
       </html>
     `;
 
     await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-    await printWin.webContents.print({ silent: false, printBackground: true });
-    printWin.close();
+    console.log('[Thermal Print] Content loaded, opening dialog...');
+
+    // Note: We don't await/close here because the system dialog needs the window to stay alive.
+    // The user can close the preview window manually when they are done.
+    printWin.webContents.print({ 
+      silent: false, 
+      printBackground: true 
+    }, (success, failureReason) => {
+      console.log(`[Thermal Print] Print result: ${success ? 'Success' : 'Failed'}, Reason: ${failureReason}`);
+      // We still don't close it automatically to be safe, or we could close it here.
+      // But let's let the user close it for now to avoid "instant close" issues.
+    });
+
     return { success: true };
   } catch (error) {
+    console.error('[Thermal Print] Error:', error);
+    if (printWin && !printWin.isDestroyed()) printWin.close();
     return { success: false, error: error.message };
   }
 });
@@ -302,8 +368,13 @@ async function generateInvoicePDF(invoiceData) {
       if (phone) { doc.text('Phone: ' + phone, margin + 5, leftCursorY); leftCursorY += 11; }
 
       const subTotalItems = items.reduce((sum, item) => sum + (item.qty * (item.price || item.rate || 0)), 0);
-      const totalGst = items.reduce((sum, item) => sum + (item.qty * (item.price || item.rate || 0) * ((item.gstPercent || item.gst_percent || 0) / 100)), 0);
-      const totalGrandAmount = subTotalItems + totalGst;
+      const totalGst = items.reduce((sum, item) => {
+        const itemTotal = item.qty * (item.price || item.rate || 0);
+        const effectiveGst = Math.max(5, item.gstPercent || item.gst_percent || 0);
+        const itemBase = itemTotal / (1 + effectiveGst / 100);
+        return sum + (itemTotal - itemBase);
+      }, 0);
+      const totalGrandAmount = subTotalItems; // Total is inclusive, so it's just the sum of (qty * price)
       const rightX = margin + halfW + 5;
       const rightSpan = halfW - 10;
       const payY = billToTopY + 18;
@@ -352,14 +423,17 @@ async function generateInvoicePDF(invoiceData) {
       doc.font('Helvetica').fontSize(9);
       let rowY = yHeaders + 25;
       items.forEach((item) => {
-        const itemBaseTotal = item.qty * (item.price || item.rate || 0);
+        const itemTotalInclusive = item.qty * (item.price || item.rate || 0);
         const gstPct = item.gstPercent || item.gst_percent || 0;
+        const effectiveGst = Math.max(5, gstPct);
+        const itemBase = itemTotalInclusive / (1 + effectiveGst / 100);
+        
         doc.text(item.product, colXs[0] + 5, rowY, { width: colXs[1] - colXs[0] - 10 });
         doc.text('-', colXs[1] + 5, rowY, { width: colXs[2] - colXs[1] - 10, align: 'center' });
         doc.text(`${item.qty}`, colXs[2] + 5, rowY, { width: colXs[3] - colXs[2] - 10, align: 'center' });
         doc.text((item.price || item.rate || 0).toFixed(2), colXs[3] + 5, rowY, { width: colXs[4] - colXs[3] - 10, align: 'right' });
-        doc.text(`${gstPct}%`, colXs[4] + 5, rowY, { width: colXs[5] - colXs[4] - 10, align: 'center' });
-        doc.text(itemBaseTotal.toFixed(2), colXs[5] + 5, rowY, { width: colXs[6] - colXs[5] - 10, align: 'right' });
+        doc.text(`${effectiveGst}%`, colXs[4] + 5, rowY, { width: colXs[5] - colXs[4] - 10, align: 'center' });
+        doc.text(itemBase.toFixed(2), colXs[5] + 5, rowY, { width: colXs[6] - colXs[5] - 10, align: 'right' });
         rowY += 15;
       });
 
@@ -367,10 +441,15 @@ async function generateInvoicePDF(invoiceData) {
       doc.moveTo(margin, footerY).lineTo(margin + width, footerY).stroke();
       doc.font('Helvetica-Bold').fontSize(9);
       const totalQty = items.reduce((sum, it) => sum + it.qty, 0);
+      const baseTotalItems = items.reduce((sum, item) => {
+        const itemTotal = item.qty * (item.price || item.rate || 0);
+        const effectiveGst = Math.max(5, item.gstPercent || item.gst_percent || 0);
+        return sum + (itemTotal / (1 + effectiveGst / 100));
+      }, 0);
       doc.text('Total', colXs[0] + 5, footerY + 4);
       doc.text('-', colXs[1] + 5, footerY + 4, { width: colXs[2] - colXs[1] - 10, align: 'center' });
       doc.text(`${totalQty}`, colXs[2] + 5, footerY + 4, { width: colXs[3] - colXs[2] - 10, align: 'center' });
-      doc.text(subTotalItems.toFixed(2), colXs[5] + 5, footerY + 4, { width: colXs[6] - colXs[5] - 10, align: 'right' });
+      doc.text(baseTotalItems.toFixed(2), colXs[5] + 5, footerY + 4, { width: colXs[6] - colXs[5] - 10, align: 'right' });
 
       const afterTableY = tableBottom;
       doc.moveTo(margin, afterTableY).lineTo(margin + width, afterTableY).stroke();
@@ -659,6 +738,10 @@ ipcMain.handle('delete-invoice', async (event, invoiceId) => {
     const deleteInvoice = db.prepare('DELETE FROM sales_invoices WHERE id = ?');
 
     const transaction = db.transaction((id) => {
+      // Restore inventory items associated with this invoice
+      db.prepare("UPDATE inventory_items SET status = 'IN_STOCK', sale_date = NULL, invoice_id = NULL, updated_at = datetime('now','localtime') WHERE invoice_id = ?").run(id);
+      db.prepare("DELETE FROM inventory_movements WHERE reference_id = ? AND movement_type = 'SALE'").run(id);
+
       deleteItems.run(id);
       deleteInvoice.run(id);
     });
@@ -2050,6 +2133,8 @@ ipcMain.handle('read-order-pdf', async (event, filePath) => {
 
 // ─── Extract Bill Data via Groq Vision AI ───────────────────
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+console.log('[Groq OCR] Key length:', GROQ_API_KEY ? GROQ_API_KEY.length : 0);
+console.log('[Groq OCR] Key prefix:', GROQ_API_KEY ? GROQ_API_KEY.substring(0, 7) : 'NONE');
 
 ipcMain.handle('ocr-bill-photo', async (event, imageSource) => {
   try {
@@ -2086,6 +2171,13 @@ ipcMain.handle('ocr-bill-photo', async (event, imageSource) => {
     // Send progress
     event.sender.send('ocr-progress', { progress: 0.3 });
 
+    const payloadSizeMB = (base64Image.length * 0.75) / (1024 * 1024);
+    console.log(`[Groq OCR] Sending image to Groq. Payload size: ~${payloadSizeMB.toFixed(2)} MB`);
+    
+    if (payloadSizeMB > 20) {
+      console.warn('[Groq OCR] Warning: Payload exceeds 20MB limit!');
+    }
+
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -2100,21 +2192,22 @@ ipcMain.handle('ocr-bill-photo', async (event, imageSource) => {
             content: [
               {
                 type: 'text',
-                text: `Analyze this bill/invoice image with 100% precision and extract EVERY detail. Return ONLY a valid JSON object.
+                text: `CRITICAL: Analyze this invoice image with 100% precision. You are a professional accounting assistant. 
+Extract EVERY single detail without missing anything.
 
-JSON format:
+REQUIRED JSON FORMAT:
 {
-  "supplierName": "Official name of the company/vendor",
-  "supplierAddress": "Full physical address of the supplier",
-  "phone": "Contact number/phone of the supplier",
-  "email": "Email address of the supplier",
-  "invoiceNumber": "The specific Bill/Invoice/Reference number",
-  "billDate": "YYYY-MM-DD (convert date to this format)",
-  "dueDate": "YYYY-MM-DD (if mentioned, otherwise empty)",
+  "supplierName": "Full official name",
+  "supplierAddress": "Complete address including city/state",
+  "phone": "Contact number",
+  "email": "Email address",
+  "invoiceNumber": "Bill/Invoice number",
+  "billDate": "YYYY-MM-DD",
+  "dueDate": "YYYY-MM-DD (if empty, omit or use null)",
   "totalAmount": 0.00,
   "items": [
     { 
-      "product": "Full item description", 
+      "product": "Detailed product description", 
       "qty": 1, 
       "rate": 0.00,
       "gstPercent": 0
@@ -2122,13 +2215,13 @@ JSON format:
   ]
 }
 
-Rules:
-1. Accuracy is critical. Double check numbers and names.
-2. If a field is not found, use an empty string "" or 0.
-3. For dates, always use YYYY-MM-DD format.
-4. For items, extract the product name, quantity, unit price (rate), and GST percentage if mentioned.
-5. totalAmount must be the final payable amount.
-6. Return ONLY the raw JSON object. No markdown, no "here is the json", no code blocks.`
+STRICT EXTRACTION RULES:
+1. **NO MISSING ITEMS**: Scan the entire item table. Every single row must be extracted. Do not summarize or skip rows.
+2. **NUMERIC PRECISION**: Extract rates and quantities exactly as written.
+3. **TAXES**: Look for GST percentage per item. If not explicitly per item, look for a global GST and apply it to items or the total correctly.
+4. **SUPPLIER DETAILS**: Usually found at the top or bottom. Extract full name and address.
+5. **DATES**: Convert any date format to YYYY-MM-DD.
+6. **FORMAT**: Return ONLY the JSON object. No preamble, no post-amble, no markdown code blocks. Just the raw JSON string.`
               },
               {
                 type: 'image_url',
@@ -2148,8 +2241,18 @@ Rules:
 
     if (!response.ok) {
       const errBody = await response.text();
-      console.error('Groq API error:', response.status, errBody);
-      return { success: false, error: `Groq API error: ${response.status}` };
+      let errorMessage = `Groq API error: ${response.status}`;
+      try {
+        const errJson = JSON.parse(errBody);
+        if (errJson.error && errJson.error.message) {
+          errorMessage = `Groq Error: ${errJson.error.message}`;
+        }
+      } catch (e) {
+        // Fallback to text if not JSON
+        errorMessage = `Groq Error (${response.status}): ${errBody.substring(0, 100)}`;
+      }
+      console.error('[Groq OCR] API error:', response.status, errBody);
+      return { success: false, error: errorMessage };
     }
 
     const result = await response.json();
@@ -2207,13 +2310,13 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
       const { supplierName, supplierAddress, address, phone, email, invoiceNumber, billDate, dueDate, totalAmount, discount = 0, paidAmount = 0, dueAmount = 0, remarks, showRemarks, items } = billData;
 
       // Pre-calculate totals for Payment Details display
-      const calcSubTotal = (items || []).reduce((sum, item) => sum + (item.qty * (item.rate || item.price || 0)), 0);
+      const calcGrand = (items || []).reduce((sum, item) => sum + (item.qty * (item.rate || item.price || 0)), 0);
       const calcTotalGst = (items || []).reduce((sum, item) => {
-        const base = item.qty * (item.rate || item.price || 0);
-        const gst = item.gstPercent || item.gst_percent || 0;
-        return sum + (base * (gst / 100));
+        const total = item.qty * (item.rate || item.price || 0);
+        const effectiveGst = Math.max(5, item.gstPercent || item.gst_percent || 0);
+        const base = total / (1 + effectiveGst / 100);
+        return sum + (total - base);
       }, 0);
-      const calcGrand = calcSubTotal + calcTotalGst;
       const calcDue = calcGrand - (paidAmount || 0) - (discount || 0);
 
       const sanitizedName = (supplierName || 'Bill').replace(/[<>:"/\\|?*]/g, '').trim();
@@ -2366,10 +2469,12 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
       let totalGstAmount = 0;
 
       items.forEach((item, index) => {
-        const baseAmount = item.qty * (item.rate || item.price || 0);
+        const totalAmount = item.qty * (item.rate || item.price || 0);
         const gstPct = item.gstPercent || item.gst_percent || 0;
-        const gstAmt = baseAmount * (gstPct / 100);
-        const lineTotal = baseAmount + gstAmt;
+        const effectiveGst = Math.max(5, gstPct);
+        const baseAmount = totalAmount / (1 + effectiveGst / 100);
+        const gstAmt = totalAmount - baseAmount;
+        
         subTotal += baseAmount;
         totalGstAmount += gstAmt;
 
@@ -2379,7 +2484,7 @@ ipcMain.handle('download-bill-pdf', async (event, billData) => {
         const itemRate = item.rate || item.price || 0;
         doc.text(itemRate.toFixed(2), colXs[3] + 5, rowY, { width: colXs[4] - colXs[3] - 10, align: 'right' });
         doc.text(`${gstPct}%`, colXs[4] + 3, rowY, { width: colXs[5] - colXs[4] - 6, align: 'center' });
-        doc.text(lineTotal.toFixed(2), colXs[5] + 5, rowY, { width: colXs[6] - colXs[5] - 10, align: 'right' });
+        doc.text(baseAmount.toFixed(2), colXs[5] + 5, rowY, { width: colXs[6] - colXs[5] - 10, align: 'right' });
 
         rowY += 15;
       });
@@ -2649,8 +2754,10 @@ async function syncBillProductsToShopifyDraft(supplierName, invoiceNumber, items
   for (const item of items) {
     try {
       const gst = item.gstPercent || 0;
-      const baseTotal = (item.qty * item.rate).toFixed(2);
-      const gstAmount = (item.qty * item.rate * gst / 100).toFixed(2);
+      const effectiveGst = Math.max(5, gst);
+      const itemTotal = item.qty * item.rate;
+      const baseTotal = (itemTotal / (1 + effectiveGst / 100)).toFixed(2);
+      const gstAmount = (itemTotal - parseFloat(baseTotal)).toFixed(2);
 
       const productPayload = {
         product: {
@@ -2920,9 +3027,10 @@ async function fetchNewShopifyOrders() {
             const productName = li.title || li.name || 'Unknown Product';
             const qty = li.quantity || 1;
             const price = parseFloat(li.price) || 0;
-            const taxRate = (li.tax_lines && li.tax_lines.length > 0)
+            let taxRate = (li.tax_lines && li.tax_lines.length > 0)
               ? li.tax_lines.reduce((sum, t) => sum + (parseFloat(t.rate) || 0), 0) * 100
               : 0;
+            if (taxRate === 0) taxRate = 5;
             insertItem.run(invoiceId, productName, qty, price, taxRate);
             parsedItems.push({ product: productName, qty, price, gst_percent: taxRate });
           }
@@ -2970,9 +3078,10 @@ async function fetchNewShopifyOrders() {
             const productName = li.title || li.name || 'Unknown Product';
             const qty = li.quantity || 1;
             const price = parseFloat(li.price) || 0;
-            const taxRate = (li.tax_lines && li.tax_lines.length > 0)
+            let taxRate = (li.tax_lines && li.tax_lines.length > 0)
               ? li.tax_lines.reduce((sum, t) => sum + (parseFloat(t.rate) || 0), 0) * 100
               : 0;
+            if (taxRate === 0) taxRate = 5;
             insertItem.run(invoiceId, productName, qty, price, taxRate);
             parsedItems.push({ product: productName, qty, price, gst_percent: taxRate });
           }
@@ -3024,6 +3133,731 @@ function stopShopifyOrderPolling() {
     shopifyOrderPollInterval = null;
   }
 }
+
+ipcMain.handle('get-last-product-gst', async (event, productName) => {
+  try {
+    const row = db.prepare('SELECT gst_percent FROM sales_items WHERE product = ? ORDER BY id DESC LIMIT 1').get(productName);
+    return { success: true, gst: row ? row.gst_percent : null };
+  } catch (error) {
+    console.error('Error fetching last product GST:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ─── INVENTORY MANAGEMENT SYSTEM ─────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+// ── Product Management ──────────────────────────────────────
+
+ipcMain.handle('inventory-create-product', async (event, data) => {
+  try {
+    const { name, brand, category, purchasePrice, sellingPrice, gstPercent, description, barcodePrefix } = data;
+    const result = db.prepare(`
+      INSERT INTO products (name, brand, category, purchase_price, selling_price, gst_percent, description, barcode_prefix)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(name, brand || null, category || null, purchasePrice || 0, sellingPrice || 0, gstPercent || 0, description || null, barcodePrefix || null);
+    return { success: true, productId: result.lastInsertRowid };
+  } catch (error) {
+    console.error('[Inventory] Error creating product:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('inventory-update-product', async (event, data) => {
+  try {
+    const { productId, name, brand, category, purchasePrice, sellingPrice, gstPercent, description, barcodePrefix } = data;
+    db.prepare(`
+      UPDATE products SET name = ?, brand = ?, category = ?, purchase_price = ?, selling_price = ?,
+        gst_percent = ?, description = ?, barcode_prefix = ?, updated_at = datetime('now','localtime')
+      WHERE id = ?
+    `).run(name, brand || null, category || null, purchasePrice || 0, sellingPrice || 0, gstPercent || 0, description || null, barcodePrefix || null, productId);
+    return { success: true };
+  } catch (error) {
+    console.error('[Inventory] Error updating product:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('inventory-get-products', async (event, filters = {}) => {
+  try {
+    const { search, category, brand } = filters;
+    let query = `
+      SELECT p.*,
+        (SELECT COUNT(*) FROM inventory_items ii WHERE ii.product_id = p.id) as total_items,
+        (SELECT COUNT(*) FROM inventory_items ii WHERE ii.product_id = p.id AND ii.status = 'IN_STOCK') as in_stock,
+        (SELECT COUNT(*) FROM inventory_items ii WHERE ii.product_id = p.id AND ii.status = 'SOLD') as sold,
+        (SELECT COUNT(*) FROM inventory_items ii WHERE ii.product_id = p.id AND ii.status = 'DAMAGED') as damaged,
+        (SELECT COUNT(*) FROM inventory_items ii WHERE ii.product_id = p.id AND ii.status = 'LOST') as lost,
+        (SELECT COUNT(*) FROM inventory_items ii WHERE ii.product_id = p.id AND ii.status = 'RETURNED') as returned
+      FROM products p WHERE 1=1
+    `;
+    const params = [];
+    if (search) {
+      query += ` AND (p.name LIKE ? OR p.brand LIKE ? OR p.category LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    if (category) {
+      query += ` AND p.category = ?`;
+      params.push(category);
+    }
+    if (brand) {
+      query += ` AND p.brand = ?`;
+      params.push(brand);
+    }
+    query += ` ORDER BY p.name ASC`;
+    const products = db.prepare(query).all(...params);
+
+    // Also get distinct categories and brands for filter dropdowns
+    const categories = db.prepare('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category').all().map(r => r.category);
+    const brands = db.prepare('SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != "" ORDER BY brand').all().map(r => r.brand);
+
+    return { success: true, products, categories, brands };
+  } catch (error) {
+    console.error('[Inventory] Error fetching products:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('inventory-get-product', async (event, productId) => {
+  try {
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
+    if (!product) return { success: false, error: 'Product not found' };
+    return { success: true, product };
+  } catch (error) {
+    console.error('[Inventory] Error fetching product:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('inventory-search-products', async (event, query) => {
+  try {
+    const products = db.prepare(`
+      SELECT p.*,
+        (SELECT COUNT(*) FROM inventory_items ii WHERE ii.product_id = p.id AND ii.status = 'IN_STOCK') as in_stock
+      FROM products p
+      WHERE p.name LIKE ? OR p.brand LIKE ? OR p.category LIKE ? OR p.barcode_prefix LIKE ?
+      ORDER BY p.name ASC LIMIT 20
+    `).all(`%${query}%`, `%${query}%`, `%${query}%`, `%${query}%`);
+    return { success: true, products };
+  } catch (error) {
+    console.error('[Inventory] Error searching products:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('inventory-delete-product', async (event, productId) => {
+  try {
+    // Check if product has any inventory items
+    const itemCount = db.prepare('SELECT COUNT(*) as cnt FROM inventory_items WHERE product_id = ?').get(productId);
+    if (itemCount && itemCount.cnt > 0) {
+      return { success: false, error: `Cannot delete product with ${itemCount.cnt} inventory item(s). Remove all inventory items first.` };
+    }
+    db.prepare('DELETE FROM products WHERE id = ?').run(productId);
+    return { success: true };
+  } catch (error) {
+    console.error('[Inventory] Error deleting product:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ── Inventory Item Management ───────────────────────────────
+
+ipcMain.handle('inventory-add-item', async (event, data) => {
+  try {
+    const { productId, barcode, purchasePrice, sellingPrice, purchaseDate, notes } = data;
+
+    // Check barcode uniqueness
+    const existing = db.prepare('SELECT id FROM inventory_items WHERE barcode = ?').get(barcode);
+    if (existing) {
+      return { success: false, error: `Barcode "${barcode}" already exists. Every barcode must be unique.` };
+    }
+
+    const transaction = db.transaction(() => {
+      const result = db.prepare(`
+        INSERT INTO inventory_items (product_id, barcode, status, purchase_price, selling_price, purchase_date, notes)
+        VALUES (?, ?, 'IN_STOCK', ?, ?, ?, ?)
+      `).run(productId, barcode, purchasePrice || 0, sellingPrice || 0, purchaseDate || null, notes || null);
+
+      const itemId = result.lastInsertRowid;
+
+      // Create PURCHASE movement
+      db.prepare(`
+        INSERT INTO inventory_movements (inventory_item_id, movement_type, remarks)
+        VALUES (?, 'PURCHASE', ?)
+      `).run(itemId, `Item purchased and added to inventory`);
+
+      return itemId;
+    });
+
+    const itemId = transaction();
+    return { success: true, itemId };
+  } catch (error) {
+    console.error('[Inventory] Error adding item:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('inventory-bulk-add', async (event, data) => {
+  try {
+    const { productId, quantity, barcodePrefix, startNumber, purchasePrice, sellingPrice, purchaseDate, barcodes } = data;
+
+    const transaction = db.transaction(() => {
+      const insertItem = db.prepare(`
+        INSERT INTO inventory_items (product_id, barcode, status, purchase_price, selling_price, purchase_date)
+        VALUES (?, ?, 'IN_STOCK', ?, ?, ?)
+      `);
+      const insertMovement = db.prepare(`
+        INSERT INTO inventory_movements (inventory_item_id, movement_type, remarks)
+        VALUES (?, 'PURCHASE', ?)
+      `);
+
+      const createdItems = [];
+
+      if (barcodes && barcodes.length > 0) {
+        // Use provided barcodes
+        for (const barcode of barcodes) {
+          const existing = db.prepare('SELECT id FROM inventory_items WHERE barcode = ?').get(barcode);
+          if (existing) {
+            throw new Error(`Barcode "${barcode}" already exists`);
+          }
+          const result = insertItem.run(productId, barcode, purchasePrice || 0, sellingPrice || 0, purchaseDate || null);
+          insertMovement.run(result.lastInsertRowid, 'Bulk purchase — item added to inventory');
+          createdItems.push({ id: result.lastInsertRowid, barcode });
+        }
+      } else {
+        // Auto-generate barcodes
+        const prefix = barcodePrefix || 'ITEM';
+        let num = startNumber || 1;
+
+        // Find the highest existing number for this prefix
+        const lastItem = db.prepare(`SELECT barcode FROM inventory_items WHERE barcode LIKE ? ORDER BY barcode DESC LIMIT 1`).get(`${prefix}%`);
+        if (lastItem) {
+          const match = lastItem.barcode.match(/(\d+)$/);
+          if (match) {
+            const existingNum = parseInt(match[1]);
+            if (existingNum >= num) num = existingNum + 1;
+          }
+        }
+
+        for (let i = 0; i < quantity; i++) {
+          const barcode = `${prefix}${String(num).padStart(6, '0')}`;
+          const result = insertItem.run(productId, barcode, purchasePrice || 0, sellingPrice || 0, purchaseDate || null);
+          insertMovement.run(result.lastInsertRowid, 'Bulk purchase — item added to inventory');
+          createdItems.push({ id: result.lastInsertRowid, barcode });
+          num++;
+        }
+      }
+
+      return createdItems;
+    });
+
+    const items = transaction();
+    return { success: true, items, count: items.length };
+  } catch (error) {
+    console.error('[Inventory] Error bulk adding items:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('inventory-scan-barcode', async (event, barcode) => {
+  try {
+    const item = db.prepare(`
+      SELECT ii.*, p.name as product_name, p.brand, p.category, p.gst_percent as product_gst,
+             p.description as product_description
+      FROM inventory_items ii
+      JOIN products p ON ii.product_id = p.id
+      WHERE ii.barcode = ?
+    `).get(barcode);
+
+    if (!item) {
+      return { success: true, found: false, barcode };
+    }
+
+    // Get movement history
+    const movements = db.prepare(`
+      SELECT im.*, 
+        CASE WHEN im.invoice_id IS NOT NULL 
+          THEN (SELECT invoice_number FROM sales_invoices WHERE id = im.invoice_id) 
+        END as invoice_number
+      FROM inventory_movements im
+      WHERE im.inventory_item_id = ?
+      ORDER BY im.created_at DESC
+    `).all(item.id);
+
+    // Get invoice info if sold
+    let invoiceInfo = null;
+    if (item.invoice_id) {
+      invoiceInfo = db.prepare('SELECT id, customer_name, invoice_number, total_amount, created_at FROM sales_invoices WHERE id = ?').get(item.invoice_id);
+    }
+
+    return { success: true, found: true, item, movements, invoiceInfo };
+  } catch (error) {
+    console.error('[Inventory] Error scanning barcode:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('inventory-update-item-status', async (event, data) => {
+  try {
+    const { itemId, barcode, status, remarks } = data;
+
+    const transaction = db.transaction(() => {
+      // Find item by ID or barcode
+      let item;
+      if (itemId) {
+        item = db.prepare('SELECT * FROM inventory_items WHERE id = ?').get(itemId);
+      } else if (barcode) {
+        item = db.prepare('SELECT * FROM inventory_items WHERE barcode = ?').get(barcode);
+      }
+      if (!item) throw new Error('Inventory item not found');
+
+      // Validate status transition
+      if (status === 'SOLD' && item.status !== 'IN_STOCK') {
+        throw new Error(`Cannot sell item with status "${item.status}". Only IN_STOCK items can be sold.`);
+      }
+      if (status === 'DAMAGED' && (item.status === 'SOLD' || item.status === 'LOST')) {
+        throw new Error(`Cannot mark as damaged. Item is currently "${item.status}".`);
+      }
+
+      // Map status to movement type
+      const movementTypeMap = {
+        'DAMAGED': 'DAMAGE',
+        'LOST': 'LOST',
+        'IN_STOCK': 'ADJUSTMENT',
+        'RETURNED': 'RETURN'
+      };
+      const movementType = movementTypeMap[status] || 'ADJUSTMENT';
+
+      db.prepare(`
+        UPDATE inventory_items SET status = ?, updated_at = datetime('now','localtime') WHERE id = ?
+      `).run(status, item.id);
+
+      db.prepare(`
+        INSERT INTO inventory_movements (inventory_item_id, movement_type, remarks)
+        VALUES (?, ?, ?)
+      `).run(item.id, movementType, remarks || `Status changed to ${status}`);
+
+      return item.id;
+    });
+
+    transaction();
+    return { success: true };
+  } catch (error) {
+    console.error('[Inventory] Error updating item status:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('inventory-get-items', async (event, filters = {}) => {
+  try {
+    const { productId, status, search, page = 1, limit = 50 } = filters;
+    let query = `
+      SELECT ii.*, p.name as product_name, p.brand, p.category
+      FROM inventory_items ii
+      JOIN products p ON ii.product_id = p.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (productId) {
+      query += ` AND ii.product_id = ?`;
+      params.push(productId);
+    }
+    if (status) {
+      query += ` AND ii.status = ?`;
+      params.push(status);
+    }
+    if (search) {
+      query += ` AND (ii.barcode LIKE ? OR p.name LIKE ? OR p.brand LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    // Get total count for pagination
+    const countQuery = query.replace(/SELECT ii\.\*, p\.name as product_name, p\.brand, p\.category/, 'SELECT COUNT(*) as total');
+    const totalRow = db.prepare(countQuery).get(...params);
+    const total = totalRow ? totalRow.total : 0;
+
+    query += ` ORDER BY ii.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, (page - 1) * limit);
+
+    const items = db.prepare(query).all(...params);
+    return { success: true, items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  } catch (error) {
+    console.error('[Inventory] Error fetching items:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ── Movement Engine ─────────────────────────────────────────
+
+ipcMain.handle('inventory-get-movements', async (event, filters = {}) => {
+  try {
+    const { itemId, movementType, limit = 50 } = filters;
+    let query = `
+      SELECT im.*, ii.barcode, p.name as product_name
+      FROM inventory_movements im
+      JOIN inventory_items ii ON im.inventory_item_id = ii.id
+      JOIN products p ON ii.product_id = p.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (itemId) {
+      query += ` AND im.inventory_item_id = ?`;
+      params.push(itemId);
+    }
+    if (movementType) {
+      query += ` AND im.movement_type = ?`;
+      params.push(movementType);
+    }
+
+    query += ` ORDER BY im.created_at DESC LIMIT ?`;
+    params.push(limit);
+
+    const movements = db.prepare(query).all(...params);
+    return { success: true, movements };
+  } catch (error) {
+    console.error('[Inventory] Error fetching movements:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ── Dashboard Analytics ─────────────────────────────────────
+
+ipcMain.handle('inventory-get-dashboard', async () => {
+  try {
+    // Core counts
+    const totalProducts = db.prepare('SELECT COUNT(*) as cnt FROM products').get().cnt;
+    const totalItems = db.prepare('SELECT COUNT(*) as cnt FROM inventory_items').get().cnt;
+    const inStock = db.prepare("SELECT COUNT(*) as cnt FROM inventory_items WHERE status = 'IN_STOCK'").get().cnt;
+    const sold = db.prepare("SELECT COUNT(*) as cnt FROM inventory_items WHERE status = 'SOLD'").get().cnt;
+    const returned = db.prepare("SELECT COUNT(*) as cnt FROM inventory_items WHERE status = 'RETURNED'").get().cnt;
+    const damaged = db.prepare("SELECT COUNT(*) as cnt FROM inventory_items WHERE status = 'DAMAGED'").get().cnt;
+    const lost = db.prepare("SELECT COUNT(*) as cnt FROM inventory_items WHERE status = 'LOST'").get().cnt;
+
+    // Financial values
+    const inventoryValue = db.prepare("SELECT COALESCE(SUM(purchase_price), 0) as val FROM inventory_items WHERE status = 'IN_STOCK'").get().val;
+    const sellingValue = db.prepare("SELECT COALESCE(SUM(selling_price), 0) as val FROM inventory_items WHERE status = 'IN_STOCK'").get().val;
+    const expectedProfit = sellingValue - inventoryValue;
+
+    // Sold value
+    const soldValue = db.prepare("SELECT COALESCE(SUM(selling_price), 0) as val FROM inventory_items WHERE status = 'SOLD'").get().val;
+    const soldCost = db.prepare("SELECT COALESCE(SUM(purchase_price), 0) as val FROM inventory_items WHERE status = 'SOLD'").get().val;
+    const realizedProfit = soldValue - soldCost;
+
+    // Low stock products (less than 3 in stock)
+    const lowStockProducts = db.prepare(`
+      SELECT p.id, p.name, p.brand,
+        (SELECT COUNT(*) FROM inventory_items ii WHERE ii.product_id = p.id AND ii.status = 'IN_STOCK') as in_stock
+      FROM products p
+      HAVING in_stock > 0 AND in_stock <= 3
+      ORDER BY in_stock ASC
+      LIMIT 10
+    `).all();
+
+    // Dead stock (products with stock but no sale in 60+ days)
+    const deadStock = db.prepare(`
+      SELECT p.id, p.name, p.brand,
+        (SELECT COUNT(*) FROM inventory_items ii WHERE ii.product_id = p.id AND ii.status = 'IN_STOCK') as in_stock,
+        (SELECT MAX(im.created_at) FROM inventory_movements im 
+         JOIN inventory_items ii2 ON im.inventory_item_id = ii2.id 
+         WHERE ii2.product_id = p.id AND im.movement_type = 'SALE') as last_sale
+      FROM products p
+      HAVING in_stock > 0 AND (last_sale IS NULL OR last_sale < datetime('now', 'localtime', '-60 days'))
+      ORDER BY in_stock DESC
+      LIMIT 10
+    `).all();
+
+    // Fast movers (most sold in last 30 days)
+    const fastMovers = db.prepare(`
+      SELECT p.id, p.name, p.brand, COUNT(im.id) as sale_count
+      FROM inventory_movements im
+      JOIN inventory_items ii ON im.inventory_item_id = ii.id
+      JOIN products p ON ii.product_id = p.id
+      WHERE im.movement_type = 'SALE' AND im.created_at >= datetime('now', 'localtime', '-30 days')
+      GROUP BY p.id
+      ORDER BY sale_count DESC
+      LIMIT 10
+    `).all();
+
+    // Slow movers (least sold in last 30 days, but have stock)
+    const slowMovers = db.prepare(`
+      SELECT p.id, p.name, p.brand,
+        (SELECT COUNT(*) FROM inventory_items ii WHERE ii.product_id = p.id AND ii.status = 'IN_STOCK') as in_stock,
+        (SELECT COUNT(*) FROM inventory_movements im2 
+         JOIN inventory_items ii2 ON im2.inventory_item_id = ii2.id 
+         WHERE ii2.product_id = p.id AND im2.movement_type = 'SALE' 
+         AND im2.created_at >= datetime('now', 'localtime', '-30 days')) as recent_sales
+      FROM products p
+      HAVING in_stock > 0
+      ORDER BY recent_sales ASC, in_stock DESC
+      LIMIT 10
+    `).all();
+
+    // Recent activity (last 20 movements)
+    const recentActivity = db.prepare(`
+      SELECT im.*, ii.barcode, p.name as product_name
+      FROM inventory_movements im
+      JOIN inventory_items ii ON im.inventory_item_id = ii.id
+      JOIN products p ON ii.product_id = p.id
+      ORDER BY im.created_at DESC
+      LIMIT 20
+    `).all();
+
+    // Today's changes
+    const todayMovements = db.prepare(`
+      SELECT movement_type, COUNT(*) as cnt
+      FROM inventory_movements
+      WHERE date(created_at) = date('now', 'localtime')
+      GROUP BY movement_type
+    `).all();
+
+    // Monthly stock movement (last 30 days by type)
+    const monthlyMovements = db.prepare(`
+      SELECT date(created_at) as date, movement_type, COUNT(*) as cnt
+      FROM inventory_movements
+      WHERE created_at >= datetime('now', 'localtime', '-30 days')
+      GROUP BY date(created_at), movement_type
+      ORDER BY date ASC
+    `).all();
+
+    return {
+      success: true,
+      data: {
+        counts: { totalProducts, totalItems, inStock, sold, returned, damaged, lost },
+        values: { inventoryValue, sellingValue, expectedProfit, soldValue, soldCost, realizedProfit },
+        lowStockProducts,
+        deadStock,
+        fastMovers,
+        slowMovers,
+        recentActivity,
+        todayMovements,
+        monthlyMovements
+      }
+    };
+  } catch (error) {
+    console.error('[Inventory] Error fetching dashboard:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ── Product Details Page ────────────────────────────────────
+
+ipcMain.handle('inventory-get-product-details', async (event, productId) => {
+  try {
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
+    if (!product) return { success: false, error: 'Product not found' };
+
+    // Status counts
+    const statusCounts = db.prepare(`
+      SELECT status, COUNT(*) as cnt FROM inventory_items WHERE product_id = ? GROUP BY status
+    `).all(productId);
+
+    // All items for this product
+    const items = db.prepare(`
+      SELECT ii.*,
+        CASE WHEN ii.invoice_id IS NOT NULL 
+          THEN (SELECT invoice_number FROM sales_invoices WHERE id = ii.invoice_id) 
+        END as invoice_number
+      FROM inventory_items ii WHERE ii.product_id = ? ORDER BY ii.created_at DESC
+    `).all(productId);
+
+    // Movement timeline
+    const movements = db.prepare(`
+      SELECT im.*, ii.barcode
+      FROM inventory_movements im
+      JOIN inventory_items ii ON im.inventory_item_id = ii.id
+      WHERE ii.product_id = ?
+      ORDER BY im.created_at DESC
+      LIMIT 50
+    `).all(productId);
+
+    // Financial summary
+    const stockValue = db.prepare("SELECT COALESCE(SUM(purchase_price), 0) as cost, COALESCE(SUM(selling_price), 0) as sell FROM inventory_items WHERE product_id = ? AND status = 'IN_STOCK'").get(productId);
+    const soldStats = db.prepare("SELECT COALESCE(SUM(selling_price), 0) as revenue, COALESCE(SUM(purchase_price), 0) as cost FROM inventory_items WHERE product_id = ? AND status = 'SOLD'").get(productId);
+
+    // Age analysis (average days items sit in stock)
+    const avgAge = db.prepare(`
+      SELECT AVG(CAST(julianday('now', 'localtime') - julianday(created_at) AS INTEGER)) as avg_days
+      FROM inventory_items WHERE product_id = ? AND status = 'IN_STOCK'
+    `).get(productId);
+
+    return {
+      success: true,
+      product,
+      statusCounts: statusCounts.reduce((acc, r) => { acc[r.status] = r.cnt; return acc; }, {}),
+      items,
+      movements,
+      financials: {
+        stockCost: stockValue.cost,
+        stockSellingValue: stockValue.sell,
+        profitGenerated: soldStats.revenue - soldStats.cost,
+        totalRevenue: soldStats.revenue,
+        totalCost: soldStats.cost,
+        avgStockAgeDays: Math.round(avgAge.avg_days || 0)
+      }
+    };
+  } catch (error) {
+    console.error('[Inventory] Error fetching product details:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ── Billing Integration ─────────────────────────────────────
+
+// Validate barcode for billing (must be IN_STOCK)
+ipcMain.handle('inventory-bill-scan', async (event, barcode) => {
+  try {
+    const item = db.prepare(`
+      SELECT ii.*, p.name as product_name, p.brand, p.selling_price as product_selling_price,
+             p.gst_percent as product_gst
+      FROM inventory_items ii
+      JOIN products p ON ii.product_id = p.id
+      WHERE ii.barcode = ?
+    `).get(barcode);
+
+    if (!item) {
+      return { success: true, found: false, barcode };
+    }
+
+    if (item.status !== 'IN_STOCK') {
+      return { success: true, found: true, available: false, item, reason: `Item status is "${item.status}". Only IN_STOCK items can be billed.` };
+    }
+
+    return { success: true, found: true, available: true, item };
+  } catch (error) {
+    console.error('[Inventory] Error validating barcode for billing:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Mark items as SOLD when invoice is completed
+ipcMain.handle('inventory-mark-sold', async (event, data) => {
+  try {
+    const { barcodes, invoiceId } = data;
+
+    const transaction = db.transaction(() => {
+      for (const barcode of barcodes) {
+        const item = db.prepare("SELECT id FROM inventory_items WHERE barcode = ? AND status = 'IN_STOCK'").get(barcode);
+        if (!item) continue; // Skip if not found or not in stock
+
+        db.prepare(`
+          UPDATE inventory_items SET status = 'SOLD', sale_date = datetime('now','localtime'), 
+            invoice_id = ?, updated_at = datetime('now','localtime') WHERE id = ?
+        `).run(invoiceId, item.id);
+
+        db.prepare(`
+          INSERT INTO inventory_movements (inventory_item_id, movement_type, invoice_id, remarks)
+          VALUES (?, 'SALE', ?, 'Item sold via invoice')
+        `).run(item.id, invoiceId);
+      }
+    });
+
+    transaction();
+    return { success: true };
+  } catch (error) {
+    console.error('[Inventory] Error marking items as sold:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Restore inventory when invoice is cancelled/deleted
+ipcMain.handle('inventory-restore-invoice', async (event, invoiceId) => {
+  try {
+    const transaction = db.transaction(() => {
+      const items = db.prepare("SELECT id FROM inventory_items WHERE invoice_id = ? AND status = 'SOLD'").all(invoiceId);
+      
+      for (const item of items) {
+        db.prepare(`
+          UPDATE inventory_items SET status = 'IN_STOCK', sale_date = NULL, 
+            invoice_id = NULL, updated_at = datetime('now','localtime') WHERE id = ?
+        `).run(item.id);
+
+        db.prepare(`
+          INSERT INTO inventory_movements (inventory_item_id, movement_type, invoice_id, remarks)
+          VALUES (?, 'RETURN', ?, 'Invoice cancelled — item restored to stock')
+        `).run(item.id, invoiceId);
+      }
+
+      return items.length;
+    });
+
+    const restoredCount = transaction();
+    return { success: true, restoredCount };
+  } catch (error) {
+    console.error('[Inventory] Error restoring inventory:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ── Returns ─────────────────────────────────────────────────
+
+ipcMain.handle('inventory-return-item', async (event, data) => {
+  try {
+    const { barcode, remarks } = data;
+
+    const transaction = db.transaction(() => {
+      const item = db.prepare("SELECT * FROM inventory_items WHERE barcode = ?").get(barcode);
+      if (!item) throw new Error(`Item with barcode "${barcode}" not found`);
+      if (item.status !== 'SOLD') throw new Error(`Item status is "${item.status}". Only SOLD items can be returned.`);
+
+      db.prepare(`
+        UPDATE inventory_items SET status = 'IN_STOCK', sale_date = NULL, 
+          invoice_id = NULL, updated_at = datetime('now','localtime') WHERE id = ?
+      `).run(item.id);
+
+      db.prepare(`
+        INSERT INTO inventory_movements (inventory_item_id, movement_type, invoice_id, remarks)
+        VALUES (?, 'RETURN', ?, ?)
+      `).run(item.id, item.invoice_id, remarks || 'Item returned by customer');
+
+      return item;
+    });
+
+    const item = transaction();
+    return { success: true, item };
+  } catch (error) {
+    console.error('[Inventory] Error returning item:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ── Purchase Workflow ───────────────────────────────────────
+
+// Scan individual item during purchase
+ipcMain.handle('inventory-purchase-scan', async (event, data) => {
+  try {
+    const { productId, barcode, purchasePrice, sellingPrice } = data;
+
+    // Check barcode uniqueness
+    const existing = db.prepare('SELECT id FROM inventory_items WHERE barcode = ?').get(barcode);
+    if (existing) {
+      return { success: false, error: `Barcode "${barcode}" already exists` };
+    }
+
+    const transaction = db.transaction(() => {
+      const result = db.prepare(`
+        INSERT INTO inventory_items (product_id, barcode, status, purchase_price, selling_price, purchase_date)
+        VALUES (?, ?, 'IN_STOCK', ?, ?, datetime('now','localtime'))
+      `).run(productId, barcode, purchasePrice || 0, sellingPrice || 0);
+
+      db.prepare(`
+        INSERT INTO inventory_movements (inventory_item_id, movement_type, remarks)
+        VALUES (?, 'PURCHASE', 'Item scanned and added during purchase')
+      `).run(result.lastInsertRowid);
+
+      return result.lastInsertRowid;
+    });
+
+    const itemId = transaction();
+    return { success: true, itemId };
+  } catch (error) {
+    console.error('[Inventory] Error scanning purchase item:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 
 ipcMain.handle('shopify-search-products', async (event, { query, searchBy }) => {
   try {
@@ -3234,6 +4068,878 @@ ipcMain.handle('get-supplier-ledgers', async () => {
     console.error('Error fetching supplier ledgers:', error);
     return { success: false, error: error.message };
   }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ─── Camera & CCTV Recording Module ─────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+const { spawn } = require('child_process');
+
+// Track active FFmpeg processes for CCTV streams
+let activeCctvStreams = {};    // { streamId: { process, recordProcess, ... } }
+let activeRecordings = {};     // { recordingId: { process, ... } }
+
+// Get the recordings folder path
+function getRecordingsFolder() {
+  const isDev = !app.isPackaged;
+  const base = isDev ? __dirname : app.getPath('userData');
+  const recFolder = path.join(base, 'recordings');
+  if (!fs.existsSync(recFolder)) {
+    fs.mkdirSync(recFolder, { recursive: true });
+  }
+  return recFolder;
+}
+
+// Get ffmpeg binary path
+function getFfmpegPath() {
+  if (app.isPackaged) {
+    // In packaged app, ffmpeg is in the resources directory or alongside the exe
+    const possiblePaths = [
+      path.join(process.resourcesPath, 'ffmpeg.exe'),
+      path.join(path.dirname(app.getPath('exe')), 'ffmpeg.exe'),
+      path.join(process.resourcesPath, '..', 'ffmpeg.exe'),
+    ];
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  // In development, check common locations
+  const devPaths = [
+    path.join(__dirname, 'node_modules', 'electron', 'dist', 'ffmpeg.exe'),
+    'ffmpeg', // Rely on system PATH
+  ];
+  for (const p of devPaths) {
+    try {
+      if (p === 'ffmpeg' || fs.existsSync(p)) return p;
+    } catch (e) { /* continue */ }
+  }
+  return 'ffmpeg'; // Fallback to system PATH
+}
+
+// ─── CCTV Camera CRUD ────────────────────────────────────────
+
+ipcMain.handle('cctv-get-cameras', async () => {
+  try {
+    const cameras = db.prepare('SELECT id, name, rtsp_url, username, is_active, created_at, updated_at FROM cctv_cameras ORDER BY name').all();
+    return { success: true, cameras };
+  } catch (error) {
+    console.error('Error fetching CCTV cameras:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cctv-save-camera', async (event, data) => {
+  try {
+    const { name, rtspUrl, username, password } = data;
+    if (!name || !rtspUrl) throw new Error('Camera name and RTSP URL are required');
+
+    const result = db.prepare(
+      `INSERT INTO cctv_cameras (name, rtsp_url, username, password, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))`
+    ).run(name, rtspUrl, username || null, password || null);
+
+    return { success: true, cameraId: result.lastInsertRowid };
+  } catch (error) {
+    console.error('Error saving CCTV camera:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cctv-update-camera', async (event, data) => {
+  try {
+    const { id, name, rtspUrl, username, password } = data;
+    if (!id || !name || !rtspUrl) throw new Error('Camera ID, name and RTSP URL are required');
+
+    // Only update password if provided (non-empty)
+    if (password) {
+      db.prepare(
+        `UPDATE cctv_cameras SET name = ?, rtsp_url = ?, username = ?, password = ?, updated_at = datetime('now','localtime') WHERE id = ?`
+      ).run(name, rtspUrl, username || null, password, id);
+    } else {
+      db.prepare(
+        `UPDATE cctv_cameras SET name = ?, rtsp_url = ?, username = ?, updated_at = datetime('now','localtime') WHERE id = ?`
+      ).run(name, rtspUrl, username || null, id);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating CCTV camera:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cctv-delete-camera', async (event, cameraId) => {
+  try {
+    db.prepare('DELETE FROM cctv_cameras WHERE id = ?').run(cameraId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting CCTV camera:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cctv-get-camera', async (event, cameraId) => {
+  try {
+    const camera = db.prepare('SELECT id, name, rtsp_url, username, is_active, created_at FROM cctv_cameras WHERE id = ?').get(cameraId);
+    if (!camera) throw new Error('Camera not found');
+    return { success: true, camera };
+  } catch (error) {
+    console.error('Error fetching CCTV camera:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cctv-test-connection', async (event, data) => {
+  try {
+    const { rtspUrl, username, password } = data;
+    let url = rtspUrl;
+
+    // Inject credentials into RTSP URL if provided
+    if (username && password) {
+      const parsed = new URL(rtspUrl);
+      parsed.username = username;
+      parsed.password = password;
+      url = parsed.toString();
+    }
+
+    const ffmpegPath = getFfmpegPath();
+    return new Promise((resolve) => {
+      const testProcess = spawn(ffmpegPath, [
+        '-rtsp_transport', 'tcp',
+        '-i', url,
+        '-t', '3',
+        '-f', 'null',
+        '-'
+      ], { timeout: 15000 });
+
+      let stderr = '';
+      let resolved = false;
+
+      testProcess.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+        // If we see frame output, connection is successful
+        if (stderr.includes('frame=') && !resolved) {
+          resolved = true;
+          testProcess.kill('SIGTERM');
+          resolve({ success: true, message: 'Connection successful' });
+        }
+      });
+
+      testProcess.on('close', (code) => {
+        if (!resolved) {
+          resolved = true;
+          if (stderr.includes('401') || stderr.includes('Unauthorized')) {
+            resolve({ success: false, error: 'Authentication failed. Check username and password.' });
+          } else if (stderr.includes('Connection refused') || stderr.includes('Connection timed out')) {
+            resolve({ success: false, error: 'Connection refused or timed out. Check the RTSP URL.' });
+          } else if (code !== 0) {
+            resolve({ success: false, error: 'Could not connect to camera stream. Verify the RTSP URL.' });
+          } else {
+            resolve({ success: true, message: 'Connection successful' });
+          }
+        }
+      });
+
+      testProcess.on('error', (err) => {
+        if (!resolved) {
+          resolved = true;
+          if (err.code === 'ENOENT') {
+            resolve({ success: false, error: 'FFmpeg not found. Please install FFmpeg to use CCTV features.' });
+          } else {
+            resolve({ success: false, error: err.message });
+          }
+        }
+      });
+
+      // Timeout after 15 seconds
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          testProcess.kill('SIGTERM');
+          resolve({ success: false, error: 'Connection timed out after 15 seconds.' });
+        }
+      }, 15000);
+    });
+  } catch (error) {
+    console.error('Error testing CCTV connection:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ─── CCTV Stream Management (FFmpeg → MJPEG via IPC) ────────
+
+ipcMain.handle('cctv-start-stream', async (event, data) => {
+  try {
+    const { cameraId } = data;
+    const camera = db.prepare('SELECT * FROM cctv_cameras WHERE id = ?').get(cameraId);
+    if (!camera) throw new Error('Camera not found');
+
+    const streamId = `stream_${cameraId}_${Date.now()}`;
+
+    // Build RTSP URL with credentials
+    let rtspUrl = camera.rtsp_url;
+    if (camera.username && camera.password) {
+      try {
+        const parsed = new URL(camera.rtsp_url);
+        parsed.username = camera.username;
+        parsed.password = camera.password;
+        rtspUrl = parsed.toString();
+      } catch (e) {
+        // If URL parsing fails, try manual injection
+        rtspUrl = camera.rtsp_url.replace('rtsp://', `rtsp://${camera.username}:${camera.password}@`);
+      }
+    }
+
+    const ffmpegPath = getFfmpegPath();
+
+    // Start FFmpeg to convert RTSP to MJPEG frames piped to stdout
+    const ffProcess = spawn(ffmpegPath, [
+      '-rtsp_transport', 'tcp',
+      '-i', rtspUrl,
+      '-f', 'mjpeg',
+      '-q:v', '5',
+      '-r', '15',           // 15 fps for preview
+      '-vf', 'scale=960:-1', // Scale to 960px width
+      'pipe:1'
+    ]);
+
+    let frameBuffer = Buffer.alloc(0);
+    const SOI = Buffer.from([0xFF, 0xD8]); // JPEG Start Of Image
+    const EOI = Buffer.from([0xFF, 0xD9]); // JPEG End Of Image
+
+    ffProcess.stdout.on('data', (chunk) => {
+      frameBuffer = Buffer.concat([frameBuffer, chunk]);
+
+      // Extract complete JPEG frames
+      while (true) {
+        const soiIdx = frameBuffer.indexOf(SOI);
+        if (soiIdx === -1) break;
+
+        const eoiIdx = frameBuffer.indexOf(EOI, soiIdx + 2);
+        if (eoiIdx === -1) break;
+
+        const frame = frameBuffer.slice(soiIdx, eoiIdx + 2);
+        frameBuffer = frameBuffer.slice(eoiIdx + 2);
+
+        // Send frame as base64 to renderer
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('cctv-frame', {
+            streamId,
+            frame: `data:image/jpeg;base64,${frame.toString('base64')}`
+          });
+        }
+      }
+
+      // Prevent buffer from growing too large
+      if (frameBuffer.length > 5 * 1024 * 1024) {
+        frameBuffer = Buffer.alloc(0);
+      }
+    });
+
+    let stderrLog = '';
+    ffProcess.stderr.on('data', (chunk) => {
+      stderrLog += chunk.toString();
+      // Don't log passwords - only log generic status
+      const msg = chunk.toString();
+      if (msg.includes('frame=') || msg.includes('fps=')) {
+        // Stream is active
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('cctv-status', { streamId, status: 'LIVE' });
+        }
+      }
+    });
+
+    ffProcess.on('close', (code) => {
+      console.log(`[CCTV] Stream ${streamId} FFmpeg exited with code ${code}`);
+      delete activeCctvStreams[streamId];
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('cctv-status', {
+          streamId,
+          status: code === 0 ? 'STOPPED' : 'DISCONNECTED',
+          error: code !== 0 ? 'Stream disconnected' : null
+        });
+      }
+    });
+
+    ffProcess.on('error', (err) => {
+      console.error(`[CCTV] Stream ${streamId} error:`, err.message);
+      delete activeCctvStreams[streamId];
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('cctv-status', {
+          streamId,
+          status: 'ERROR',
+          error: err.code === 'ENOENT' ? 'FFmpeg not found' : err.message
+        });
+      }
+    });
+
+    activeCctvStreams[streamId] = {
+      process: ffProcess,
+      cameraId,
+      cameraName: camera.name,
+      startedAt: Date.now()
+    };
+
+    return { success: true, streamId, cameraName: camera.name };
+  } catch (error) {
+    console.error('Error starting CCTV stream:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cctv-stop-stream', async (event, streamId) => {
+  try {
+    const stream = activeCctvStreams[streamId];
+    if (stream) {
+      if (stream.process && !stream.process.killed) {
+        stream.process.kill('SIGTERM');
+        // Force kill after 3 seconds if not exited
+        setTimeout(() => {
+          try { if (!stream.process.killed) stream.process.kill('SIGKILL'); } catch (e) { }
+        }, 3000);
+      }
+      delete activeCctvStreams[streamId];
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error stopping CCTV stream:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ─── CCTV Recording (FFmpeg → MP4 file) ─────────────────────
+
+ipcMain.handle('cctv-start-recording', async (event, data) => {
+  try {
+    const { cameraId, streamId } = data;
+    const camera = db.prepare('SELECT * FROM cctv_cameras WHERE id = ?').get(cameraId);
+    if (!camera) throw new Error('Camera not found');
+
+    const recFolder = getRecordingsFolder();
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[-:T]/g, '').replace(/\..+/, '').replace(/(\d{8})(\d{6})/, '$1_$2');
+    const fileName = `recording_CCTV_${timestamp}.mp4`;
+    const filePath = path.join(recFolder, fileName);
+    const startTime = now.toISOString().replace('T', ' ').substring(0, 19);
+
+    // Save recording metadata
+    const result = db.prepare(
+      `INSERT INTO recordings (source_type, camera_name, start_time, status, cctv_camera_id, file_path) VALUES (?, ?, ?, 'RECORDING', ?, ?)`
+    ).run('CCTV', camera.name, startTime, cameraId, filePath);
+    const recordingId = Number(result.lastInsertRowid);
+
+    // Build RTSP URL with credentials
+    let rtspUrl = camera.rtsp_url;
+    if (camera.username && camera.password) {
+      try {
+        const parsed = new URL(camera.rtsp_url);
+        parsed.username = camera.username;
+        parsed.password = camera.password;
+        rtspUrl = parsed.toString();
+      } catch (e) {
+        rtspUrl = camera.rtsp_url.replace('rtsp://', `rtsp://${camera.username}:${camera.password}@`);
+      }
+    }
+
+    const ffmpegPath = getFfmpegPath();
+
+    // Start recording FFmpeg process
+    const recProcess = spawn(ffmpegPath, [
+      '-rtsp_transport', 'tcp',
+      '-i', rtspUrl,
+      '-c', 'copy',
+      '-f', 'mp4',
+      '-movflags', '+frag_keyframe+empty_moov+faststart',
+      '-y',
+      filePath
+    ]);
+
+    recProcess.stderr.on('data', (chunk) => {
+      // Monitor for errors silently
+      const msg = chunk.toString();
+      if (msg.includes('401') || msg.includes('Unauthorized')) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('recording-error', {
+            recordingId,
+            error: 'Authentication failed during recording'
+          });
+        }
+      }
+    });
+
+    recProcess.on('close', (code) => {
+      console.log(`[CCTV Recording] Process for recording ${recordingId} exited with code ${code}`);
+      // Update recording metadata on natural close
+      try {
+        const endTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
+        const rec = db.prepare('SELECT start_time FROM recordings WHERE id = ?').get(recordingId);
+        if (rec) {
+          const startMs = new Date(rec.start_time).getTime();
+          const endMs = new Date(endTime).getTime();
+          const durationSeconds = Math.round((endMs - startMs) / 1000);
+          let fileSize = 0;
+          try { fileSize = fs.statSync(filePath).size; } catch (e) { }
+
+          db.prepare(
+            `UPDATE recordings SET end_time = ?, duration_seconds = ?, file_size = ?, status = ? WHERE id = ?`
+          ).run(endTime, durationSeconds, fileSize, code === 0 ? 'SAVED' : 'ERROR', recordingId);
+        }
+      } catch (e) {
+        console.error('[CCTV Recording] Error updating recording metadata:', e);
+      }
+      delete activeRecordings[recordingId];
+    });
+
+    recProcess.on('error', (err) => {
+      console.error(`[CCTV Recording] Error:`, err.message);
+      db.prepare(`UPDATE recordings SET status = 'ERROR' WHERE id = ?`).run(recordingId);
+      delete activeRecordings[recordingId];
+    });
+
+    activeRecordings[recordingId] = {
+      process: recProcess,
+      filePath,
+      cameraId,
+      startTime: Date.now()
+    };
+
+    return { success: true, recordingId, filePath, fileName };
+  } catch (error) {
+    console.error('Error starting CCTV recording:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cctv-stop-recording', async (event, recordingId) => {
+  try {
+    const rec = activeRecordings[recordingId];
+    if (rec) {
+      // Send 'q' to FFmpeg for graceful stop, then SIGTERM
+      if (rec.process && !rec.process.killed) {
+        rec.process.stdin.write('q');
+        setTimeout(() => {
+          try { if (!rec.process.killed) rec.process.kill('SIGTERM'); } catch (e) { }
+        }, 3000);
+        setTimeout(() => {
+          try { if (!rec.process.killed) rec.process.kill('SIGKILL'); } catch (e) { }
+        }, 8000);
+      }
+    }
+
+    // Finalize the recording after a short delay to let FFmpeg finish
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const recording = db.prepare('SELECT * FROM recordings WHERE id = ?').get(recordingId);
+    if (recording) {
+      const endTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const startMs = new Date(recording.start_time).getTime();
+      const endMs = new Date(endTime).getTime();
+      const durationSeconds = Math.round((endMs - startMs) / 1000);
+      let fileSize = 0;
+      try { fileSize = fs.statSync(recording.file_path).size; } catch (e) { }
+
+      db.prepare(
+        `UPDATE recordings SET end_time = ?, duration_seconds = ?, file_size = ?, status = 'SAVED' WHERE id = ?`
+      ).run(endTime, durationSeconds, fileSize, recordingId);
+    }
+
+    delete activeRecordings[recordingId];
+    return { success: true };
+  } catch (error) {
+    console.error('Error stopping CCTV recording:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ─── Webcam Recording File Save ──────────────────────────────
+
+ipcMain.handle('webcam-save-recording', async (event, data) => {
+  try {
+    const { cameraName, startTime, durationSeconds, videoBuffer, invoiceId } = data;
+    const recFolder = getRecordingsFolder();
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[-:T]/g, '').replace(/\..+/, '').replace(/(\d{8})(\d{6})/, '$1_$2');
+    const fileName = `recording_WEBCAM_${timestamp}.webm`;
+    const filePath = path.join(recFolder, fileName);
+    const endTime = now.toISOString().replace('T', ' ').substring(0, 19);
+
+    // Write the video blob to disk
+    const buffer = Buffer.from(videoBuffer);
+    fs.writeFileSync(filePath, buffer);
+    const fileSize = buffer.length;
+
+    // Save metadata to database
+    let result;
+    if (invoiceId) {
+      result = db.prepare(
+        `INSERT INTO recordings (source_type, camera_name, start_time, end_time, duration_seconds, file_path, file_size, status, invoice_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'SAVED', ?)`
+      ).run('WEBCAM', cameraName || 'Webcam', startTime, endTime, durationSeconds, filePath, fileSize, invoiceId);
+    } else {
+      result = db.prepare(
+        `INSERT INTO recordings (source_type, camera_name, start_time, end_time, duration_seconds, file_path, file_size, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'SAVED')`
+      ).run('WEBCAM', cameraName || 'Webcam', startTime, endTime, durationSeconds, filePath, fileSize);
+    }
+
+    return { success: true, recordingId: Number(result.lastInsertRowid), filePath, fileName, fileSize };
+  } catch (error) {
+    console.error('Error saving webcam recording:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ─── Recording Management ────────────────────────────────────
+
+ipcMain.handle('recording-get-by-invoice', async (event, invoiceId) => {
+  try {
+    const recording = db.prepare(
+      `SELECT r.*, c.name as cctv_name FROM recordings r LEFT JOIN cctv_cameras c ON r.cctv_camera_id = c.id WHERE r.invoice_id = ? AND r.status != 'DELETED' ORDER BY r.created_at DESC LIMIT 1`
+    ).get(invoiceId);
+    return { success: true, recording };
+  } catch (error) {
+    console.error('Error fetching recording by invoice:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('recording-get-all', async () => {
+  try {
+    const recordings = db.prepare(
+      `SELECT r.*, c.name as cctv_name FROM recordings r LEFT JOIN cctv_cameras c ON r.cctv_camera_id = c.id WHERE r.status != 'DELETED' ORDER BY r.created_at DESC`
+    ).all();
+    return { success: true, recordings };
+  } catch (error) {
+    console.error('Error fetching recordings:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('recording-get-details', async (event, recordingId) => {
+  try {
+    const recording = db.prepare(
+      `SELECT r.*, c.name as cctv_name FROM recordings r LEFT JOIN cctv_cameras c ON r.cctv_camera_id = c.id WHERE r.id = ?`
+    ).get(recordingId);
+    if (!recording) throw new Error('Recording not found');
+
+    // Check if file still exists
+    let fileExists = false;
+    try { fileExists = fs.existsSync(recording.file_path); } catch (e) { }
+    recording.fileExists = fileExists;
+
+    return { success: true, recording };
+  } catch (error) {
+    console.error('Error fetching recording details:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('recording-delete', async (event, recordingId) => {
+  try {
+    const recording = db.prepare('SELECT * FROM recordings WHERE id = ?').get(recordingId);
+    if (!recording) throw new Error('Recording not found');
+
+    // Delete the actual video file
+    if (recording.file_path) {
+      try {
+        if (fs.existsSync(recording.file_path)) {
+          fs.unlinkSync(recording.file_path);
+        }
+      } catch (e) {
+        console.error('Error deleting recording file:', e);
+      }
+    }
+
+    // Delete from database
+    db.prepare('DELETE FROM recordings WHERE id = ?').run(recordingId);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting recording:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('recording-get-file-path', async (event, recordingId) => {
+  try {
+    const recording = db.prepare('SELECT file_path FROM recordings WHERE id = ?').get(recordingId);
+    if (!recording || !recording.file_path) throw new Error('Recording file not found');
+    if (!fs.existsSync(recording.file_path)) throw new Error('Recording file has been moved or deleted');
+    return { success: true, filePath: recording.file_path };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('recording-open-folder', async () => {
+  try {
+    const recFolder = getRecordingsFolder();
+    shell.openPath(recFolder);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('recording-read-file', async (event, filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) throw new Error('File not found');
+    const buffer = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeMap = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo' };
+    const mime = mimeMap[ext] || 'video/mp4';
+    return { success: true, data: buffer.toString('base64'), mime };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ─── Wireless Phone Server ──────────────────────────────────
+let wirelessApp = null;
+let wirelessServer = null;
+let wirelessWss = null;
+let wirelessTunnel = null;
+
+let isWirelessLive = false;
+
+ipcMain.handle('wireless-start-server', async (event) => {
+  try {
+    if (wirelessServer && wirelessTunnel) {
+      return { success: true, url: await wirelessTunnel.getURL(), isLive: isWirelessLive };
+    }
+
+    const express = require('express');
+    const WebSocket = require('ws');
+    const http = require('http');
+
+    wirelessApp = express();
+    wirelessApp.use(express.text({ limit: '10mb' })); // for receiving base64 frames
+
+    wirelessServer = http.createServer(wirelessApp);
+
+    const port = 38475; // Arbitrary random port
+
+    // Serve the client application to the phone
+    wirelessApp.get('/', (req, res) => {
+      res.send(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ASPORTS Camera Link</title>
+  <style>
+    body { margin: 0; padding: 0; background: #0a0a1a; color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    #video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+    #canvas { display: none; }
+    .controls { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; justify-content: center; gap: 15px; z-index: 10; flex-wrap: wrap; padding: 0 10px; }
+    button { padding: 15px 20px; border-radius: 30px; border: none; font-size: 16px; font-weight: bold; color: white; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.5); flex: 1; max-width: 180px; }
+    #btn-stop { background: #475569; display: none; }
+    #btn-switch { background: #3b82f6; display: none; }
+    #btn-record { background: #10b981; display: none; }
+    #btn-record.recording { background: #f43f5e; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+    .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 20; text-align: center; padding: 20px; flex-direction: column; gap: 20px;}
+    #btn-start { background: #10b981; padding: 20px 40px; font-size: 20px; max-width: 300px; }
+  </style>
+</head>
+<body>
+  <div class="overlay" id="overlay">
+    <h2>ASPORTS ZONE</h2>
+    <p>Allow camera permissions to stream your phone's video to your PC.</p>
+    <button id="btn-start">Start Camera</button>
+  </div>
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <div class="controls">
+    <button id="btn-switch">Switch Cam</button>
+    <button id="btn-record">Start Video</button>
+    <button id="btn-stop">Stop Streaming</button>
+  </div>
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const btnSwitch = document.getElementById('btn-switch');
+    const btnRecord = document.getElementById('btn-record');
+    const overlay = document.getElementById('overlay');
+    let stream = null;
+    let frameInterval = null;
+    let facingMode = 'environment';
+    let isStreaming = false;
+    let isRecording = false;
+
+    async function startCamera() {
+      try {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } } });
+        video.srcObject = stream;
+        video.play();
+        overlay.style.display = 'none';
+        btnStop.style.display = 'block';
+        btnSwitch.style.display = 'block';
+        btnRecord.style.display = 'block';
+        
+        isStreaming = true;
+        await fetch('/connect', { method: 'POST' }).catch(e => {});
+        sendFrames();
+      } catch (err) {
+        alert('Camera error: ' + err.message);
+      }
+    }
+
+    function sendFrames() {
+      if (frameInterval) clearInterval(frameInterval);
+      frameInterval = setInterval(async () => {
+        if (!isStreaming || video.videoWidth === 0) return;
+        
+        // Scale down the video to max 640px width for ultra-fast streaming
+        const maxWidth = 640;
+        let drawWidth = video.videoWidth;
+        let drawHeight = video.videoHeight;
+        
+        if (drawWidth > maxWidth) {
+          const ratio = maxWidth / drawWidth;
+          drawWidth = maxWidth;
+          drawHeight = drawHeight * ratio;
+        }
+        
+        canvas.width = drawWidth;
+        canvas.height = drawHeight;
+        ctx.drawImage(video, 0, 0, drawWidth, drawHeight);
+        
+        // Compress jpeg to 0.4 for very small payload (~10-20KB per frame)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.4); 
+        
+        try {
+          await fetch('/frame', {
+            method: 'POST',
+            body: dataUrl,
+            headers: { 'Content-Type': 'text/plain' }
+          });
+        } catch (e) {
+          console.error("Frame send error", e);
+        }
+      }, 1000 / 15); // Increased to 15 fps for smoother motion now that frames are tiny
+    }
+
+    btnStart.onclick = startCamera;
+    btnSwitch.onclick = () => { facingMode = facingMode === 'environment' ? 'user' : 'environment'; startCamera(); };
+    btnRecord.onclick = async () => {
+      if (!isRecording) {
+        // Start recording
+        isRecording = true;
+        btnRecord.classList.add('recording');
+        btnRecord.innerText = 'End Video';
+        await fetch('/record-start', { method: 'POST' }).catch(e => {});
+      } else {
+        // Stop recording
+        isRecording = false;
+        btnRecord.classList.remove('recording');
+        btnRecord.innerText = 'Start Video';
+        await fetch('/record-stop', { method: 'POST' }).catch(e => {});
+      }
+    };
+    btnStop.onclick = async () => {
+      isStreaming = false;
+      if (isRecording) {
+        isRecording = false;
+        btnRecord.classList.remove('recording');
+        btnRecord.innerText = 'Start Video';
+        await fetch('/record-stop', { method: 'POST' }).catch(e => {});
+      }
+      clearInterval(frameInterval);
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      await fetch('/disconnect', { method: 'POST' }).catch(e => {});
+      
+      overlay.style.display = 'flex';
+      btnStop.style.display = 'none';
+      btnSwitch.style.display = 'none';
+      btnRecord.style.display = 'none';
+      video.srcObject = null;
+    };
+    
+    // Cleanup on close
+    window.addEventListener('beforeunload', () => {
+      if (isStreaming) {
+        fetch('/disconnect', { method: 'POST', keepalive: true }).catch(e => {});
+      }
+    });
+  </script>
+</body>
+</html>`);
+    });
+
+    // Endpoints for HTTP fallback instead of WebSockets
+    wirelessApp.post('/connect', (req, res) => {
+      isWirelessLive = true;
+      if (mainWindow) mainWindow.webContents.send('wireless-status', { status: 'LIVE' });
+      res.sendStatus(200);
+    });
+
+    wirelessApp.post('/record-start', (req, res) => {
+      if (mainWindow) mainWindow.webContents.send('wireless-record-trigger', { action: 'start' });
+      res.sendStatus(200);
+    });
+
+    wirelessApp.post('/record-stop', (req, res) => {
+      if (mainWindow) mainWindow.webContents.send('wireless-record-trigger', { action: 'stop' });
+      res.sendStatus(200);
+    });
+
+    wirelessApp.post('/disconnect', (req, res) => {
+      isWirelessLive = false;
+      if (mainWindow) mainWindow.webContents.send('wireless-status', { status: 'DISCONNECTED' });
+      res.sendStatus(200);
+    });
+
+    wirelessApp.post('/frame', (req, res) => {
+      if (mainWindow && req.body) {
+        mainWindow.webContents.send('wireless-frame', { frame: req.body });
+      }
+      res.sendStatus(200);
+    });
+
+    await new Promise((resolve) => wirelessServer.listen(port, '0.0.0.0', resolve));
+
+    // untun (Cloudflare) generates a completely unlimited, secure public https url
+    const { startTunnel } = require('untun');
+    wirelessTunnel = await startTunnel({ port: port, acceptCloudflareNotice: true });
+    
+    // Store url to return to client
+    const url = await wirelessTunnel.getURL();
+    return { success: true, url };
+  } catch (err) {
+    console.error('Error starting wireless server:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('wireless-stop-server', async (event) => {
+  try {
+    if (wirelessTunnel) {
+      await wirelessTunnel.close();
+      wirelessTunnel = null;
+    }
+    if (wirelessServer) {
+      wirelessServer.close();
+      wirelessServer = null;
+    }
+    wirelessApp = null;
+    return { success: true };
+  } catch (err) {
+    console.error('Error stopping wireless server:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+// Clean up FFmpeg processes on app quit
+app.on('before-quit', () => {
+  Object.values(activeCctvStreams).forEach(s => {
+    try { if (s.process && !s.process.killed) s.process.kill('SIGTERM'); } catch (e) { }
+  });
+  Object.values(activeRecordings).forEach(r => {
+    try { if (r.process && !r.process.killed) r.process.kill('SIGTERM'); } catch (e) { }
+  });
 });
 
 // Ensure only one instance of the app runs at a time

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/inventory.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+  <div class="bg-glow bg-glow--3"></div>
+
+  <div class="app-container app-container--wide">
+    <!-- Header -->
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back to Home">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">inventory_2</span>
+          <div>
+            <h1 class="header__title">Inventory Management</h1>
+            <p class="header__subtitle">ASPORTS ZONE</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav class="inv-tabs" id="inv-tabs">
+      <button class="inv-tab active" data-tab="dashboard">
+        <span class="material-icons-round">dashboard</span>
+        <span>Dashboard</span>
+      </button>
+      <button class="inv-tab" data-tab="products">
+        <span class="material-icons-round">category</span>
+        <span>Products</span>
+      </button>
+      <button class="inv-tab" data-tab="items">
+        <span class="material-icons-round">qr_code_2</span>
+        <span>Inventory Items</span>
+      </button>
+      <button class="inv-tab" data-tab="scan">
+        <span class="material-icons-round">qr_code_scanner</span>
+        <span>Barcode Search</span>
+      </button>
+    </nav>
+
+    <!-- Tab Content -->
+    <main class="inv-main">
+
+      <!-- ═══ DASHBOARD TAB ═══ -->
+      <section class="inv-panel active" id="panel-dashboard">
+        <div class="dash-stats" id="dash-stats"><!-- Populated by JS --></div>
+        <div class="dash-grid">
+          <div class="dash-card" id="dash-values"><!-- Financial values --></div>
+          <div class="dash-card" id="dash-today"><!-- Today's changes --></div>
+        </div>
+        <div class="dash-grid dash-grid--3">
+          <div class="dash-card" id="dash-fast-movers"><h3 class="dash-card__title"><span class="material-icons-round">trending_up</span> Fast Movers</h3><div class="dash-card__body"></div></div>
+          <div class="dash-card" id="dash-slow-movers"><h3 class="dash-card__title"><span class="material-icons-round">trending_down</span> Slow Movers</h3><div class="dash-card__body"></div></div>
+          <div class="dash-card" id="dash-low-stock"><h3 class="dash-card__title"><span class="material-icons-round">warning</span> Low Stock</h3><div class="dash-card__body"></div></div>
+        </div>
+        <div class="dash-card" id="dash-activity">
+          <h3 class="dash-card__title"><span class="material-icons-round">history</span> Recent Activity</h3>
+          <div class="dash-card__body" id="dash-activity-body"></div>
+        </div>
+      </section>
+
+      <!-- ═══ PRODUCTS TAB ═══ -->
+      <section class="inv-panel" id="panel-products">
+        <div class="inv-toolbar">
+          <div class="inv-toolbar__left">
+            <div class="inv-search-wrap">
+              <span class="material-icons-round">search</span>
+              <input type="text" id="product-search" class="inv-search" placeholder="Search products...">
+            </div>
+            <select id="filter-category" class="inv-select"><option value="">All Categories</option></select>
+            <select id="filter-brand" class="inv-select"><option value="">All Brands</option></select>
+          </div>
+          <button class="btn btn--primary" id="btn-add-product">
+            <span class="material-icons-round">add</span> New Product
+          </button>
+        </div>
+        <div class="inv-table-wrap" id="products-table-wrap">
+          <table class="inv-table" id="products-table">
+            <thead>
+              <tr>
+                <th>Product Name</th>
+                <th>Brand</th>
+                <th>Category</th>
+                <th>Purchase ₹</th>
+                <th>Selling ₹</th>
+                <th>GST %</th>
+                <th>In Stock</th>
+                <th>Total</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="products-tbody"></tbody>
+          </table>
+          <div class="inv-empty" id="products-empty" style="display:none;">
+            <span class="material-icons-round">category</span>
+            <p>No products yet. Add your first product to get started.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ ITEMS TAB ═══ -->
+      <section class="inv-panel" id="panel-items">
+        <div class="inv-toolbar">
+          <div class="inv-toolbar__left">
+            <div class="inv-search-wrap">
+              <span class="material-icons-round">search</span>
+              <input type="text" id="items-search" class="inv-search" placeholder="Search by barcode, product...">
+            </div>
+            <select id="filter-status" class="inv-select">
+              <option value="">All Statuses</option>
+              <option value="IN_STOCK">In Stock</option>
+              <option value="SOLD">Sold</option>
+              <option value="RETURNED">Returned</option>
+              <option value="DAMAGED">Damaged</option>
+              <option value="LOST">Lost</option>
+            </select>
+          </div>
+          <div class="inv-toolbar__right">
+            <button class="btn btn--secondary" id="btn-bulk-add">
+              <span class="material-icons-round">library_add</span> Bulk Purchase
+            </button>
+            <button class="btn btn--primary" id="btn-add-item">
+              <span class="material-icons-round">add</span> Add Item
+            </button>
+          </div>
+        </div>
+        <div class="inv-table-wrap" id="items-table-wrap">
+          <table class="inv-table" id="items-table">
+            <thead>
+              <tr>
+                <th>Barcode</th>
+                <th>Product</th>
+                <th>Brand</th>
+                <th>Status</th>
+                <th>Purchase ₹</th>
+                <th>Selling ₹</th>
+                <th>Purchase Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="items-tbody"></tbody>
+          </table>
+          <div class="inv-empty" id="items-empty" style="display:none;">
+            <span class="material-icons-round">qr_code_2</span>
+            <p>No inventory items found.</p>
+          </div>
+        </div>
+        <div class="inv-pagination" id="items-pagination"></div>
+      </section>
+
+      <!-- ═══ BARCODE SEARCH TAB ═══ -->
+      <section class="inv-panel" id="panel-scan">
+        <div class="scan-hero">
+          <div class="scan-input-wrap">
+            <span class="material-icons-round scan-icon">qr_code_scanner</span>
+            <input type="text" id="barcode-input" class="scan-input" placeholder="Scan or type barcode..." autofocus autocomplete="off" spellcheck="false">
+            <div class="scan-pulse"></div>
+          </div>
+          <p class="scan-hint">Scan a barcode or type it and press Enter</p>
+        </div>
+        <div class="scan-result" id="scan-result" style="display:none;">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ═══ PRODUCT MODAL ═══ -->
+  <div class="modal-overlay" id="modal-product">
+    <div class="modal">
+      <div class="modal__header">
+        <h3 class="modal__title" id="modal-product-title">Add Product</h3>
+        <button class="modal__close" id="modal-product-close"><span class="material-icons-round">close</span></button>
+      </div>
+      <div class="modal__body">
+        <input type="hidden" id="mp-id">
+        <div class="modal__row">
+          <div class="form-group"><label class="form-label">Product Name *</label><input type="text" id="mp-name" class="form-input" placeholder="e.g. Nike Football"></div>
+          <div class="form-group"><label class="form-label">Brand</label><input type="text" id="mp-brand" class="form-input" placeholder="e.g. Nike"></div>
+        </div>
+        <div class="modal__row">
+          <div class="form-group"><label class="form-label">Category</label><input type="text" id="mp-category" class="form-input" placeholder="e.g. Football"></div>
+          <div class="form-group"><label class="form-label">Barcode Prefix</label><input type="text" id="mp-prefix" class="form-input" placeholder="e.g. FB"></div>
+        </div>
+        <div class="modal__row modal__row--3">
+          <div class="form-group"><label class="form-label">Purchase Price ₹</label><input type="number" id="mp-purchase" class="form-input" placeholder="0" step="0.01"></div>
+          <div class="form-group"><label class="form-label">Selling Price ₹</label><input type="number" id="mp-selling" class="form-input" placeholder="0" step="0.01"></div>
+          <div class="form-group"><label class="form-label">GST %</label><input type="number" id="mp-gst" class="form-input" placeholder="0" step="0.01"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Description</label><textarea id="mp-desc" class="form-input" placeholder="Optional description" rows="2"></textarea></div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="mp-cancel">Cancel</button>
+        <button class="btn btn--primary" id="mp-save"><span class="material-icons-round">save</span> Save Product</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ADD ITEM MODAL ═══ -->
+  <div class="modal-overlay" id="modal-item">
+    <div class="modal">
+      <div class="modal__header">
+        <h3 class="modal__title">Add Inventory Item</h3>
+        <button class="modal__close" id="modal-item-close"><span class="material-icons-round">close</span></button>
+      </div>
+      <div class="modal__body">
+        <div class="form-group">
+          <label class="form-label">Product *</label>
+          <select id="mi-product" class="form-input"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Barcode *</label>
+          <input type="text" id="mi-barcode" class="form-input" placeholder="Scan or type barcode" autocomplete="off">
+        </div>
+        <div class="modal__row">
+          <div class="form-group"><label class="form-label">Purchase Price ₹</label><input type="number" id="mi-purchase" class="form-input" placeholder="0" step="0.01"></div>
+          <div class="form-group"><label class="form-label">Selling Price ₹</label><input type="number" id="mi-selling" class="form-input" placeholder="0" step="0.01"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Purchase Date</label><input type="date" id="mi-date" class="form-input"></div>
+        <div class="form-group"><label class="form-label">Notes</label><input type="text" id="mi-notes" class="form-input" placeholder="Optional notes"></div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="mi-cancel">Cancel</button>
+        <button class="btn btn--primary" id="mi-save"><span class="material-icons-round">add</span> Add Item</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ BULK ADD MODAL ═══ -->
+  <div class="modal-overlay" id="modal-bulk">
+    <div class="modal">
+      <div class="modal__header">
+        <h3 class="modal__title">Bulk Purchase</h3>
+        <button class="modal__close" id="modal-bulk-close"><span class="material-icons-round">close</span></button>
+      </div>
+      <div class="modal__body">
+        <div class="form-group">
+          <label class="form-label">Product *</label>
+          <select id="mb-product" class="form-input"></select>
+        </div>
+        <div class="modal__row">
+          <div class="form-group"><label class="form-label">Quantity *</label><input type="number" id="mb-qty" class="form-input" placeholder="e.g. 10" min="1"></div>
+          <div class="form-group"><label class="form-label">Barcode Prefix</label><input type="text" id="mb-prefix" class="form-input" placeholder="Auto from product"></div>
+        </div>
+        <div class="modal__row">
+          <div class="form-group"><label class="form-label">Purchase Price ₹</label><input type="number" id="mb-purchase" class="form-input" placeholder="0" step="0.01"></div>
+          <div class="form-group"><label class="form-label">Selling Price ₹</label><input type="number" id="mb-selling" class="form-input" placeholder="0" step="0.01"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Purchase Date</label><input type="date" id="mb-date" class="form-input"></div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="mb-cancel">Cancel</button>
+        <button class="btn btn--primary" id="mb-save"><span class="material-icons-round">library_add</span> Create Items</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PRODUCT DETAIL MODAL ═══ -->
+  <div class="modal-overlay" id="modal-detail">
+    <div class="modal modal--wide">
+      <div class="modal__header">
+        <h3 class="modal__title" id="detail-title">Product Details</h3>
+        <button class="modal__close" id="modal-detail-close"><span class="material-icons-round">close</span></button>
+      </div>
+      <div class="modal__body" id="detail-body">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <span class="material-icons-round toast__icon" id="toast-icon">check_circle</span>
+    <span id="toast-message"></span>
+  </div>
+
+  <script src="../scripts/inventory.js"></script>
+</body>
+</html>

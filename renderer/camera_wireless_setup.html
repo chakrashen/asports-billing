@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Wireless Phone Setup - ASPORTS ZONE</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <link rel="stylesheet" href="../styles/home.css">
+  <link rel="stylesheet" href="../styles/camera.css">
+  <style>
+    .split-layout {
+      display: flex;
+      gap: 30px;
+      max-width: 1200px;
+      margin: 20px auto;
+      align-items: stretch;
+      min-height: 500px;
+    }
+    .setup-container {
+      flex: 1;
+      background: var(--surface-light);
+      border: 1px solid var(--border-medium);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      text-align: center;
+      position: relative;
+    }
+    .setup-container::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: -1px; right: -1px; bottom: -1px;
+      background: linear-gradient(135deg, rgba(251,146,60,0.3) 0%, transparent 100%);
+      border-radius: var(--radius-lg);
+      z-index: -1;
+    }
+    .qr-box {
+      width: 240px;
+      height: 240px;
+      margin: 30px auto;
+      background: #fff;
+      padding: 10px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-lg);
+    }
+    .qr-box img {
+      width: 100%;
+      height: 100%;
+      image-rendering: crisp-edges;
+    }
+    .loading-spinner {
+      border: 4px solid rgba(251,146,60, 0.2);
+      border-top: 4px solid rgb(251,146,60);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .status-text {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      margin-top: 20px;
+    }
+    .url-display {
+      background: rgba(0,0,0,0.3);
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-family: monospace;
+      color: var(--accent-cyan);
+      margin-top: 15px;
+      word-break: break-all;
+    }
+
+    /* Live Preview Column */
+    .live-preview-container {
+      flex: 1;
+      background: var(--surface-light);
+      border: 1px solid var(--border-medium);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .live-preview-title {
+      font-family: 'Outfit';
+      font-size: 1.2rem;
+      margin: 0 0 15px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .live-preview-box {
+      flex: 1;
+      background: #000;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .live-preview-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: var(--radius-md);
+      display: none;
+    }
+    .live-preview-placeholder {
+      color: rgba(255,255,255,0.4);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-proceed {
+      margin-top: 20px;
+      background: rgb(251,146,60);
+      color: #fff;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 30px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      display: none;
+      width: 100%;
+      transition: transform 0.2s, background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn-proceed:hover {
+      transform: scale(1.02);
+      background: rgb(249,115,22);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <header class="app-header">
+      <div class="header-left">
+        <button class="icon-btn" id="btn-back" title="Back to Camera Selection">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <h1 class="header-title">Wireless Phone Setup</h1>
+      </div>
+      <div class="header-right">
+        <div class="datetime-display">
+          <div class="date" id="header-date">--</div>
+          <div class="time" id="header-time">--:--:--</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <div class="split-layout">
+        <!-- Left Side: Setup -->
+        <div class="setup-container">
+          <span class="material-icons-round" style="font-size: 48px; color: rgb(251,146,60); margin-bottom: 10px;">qr_code_scanner</span>
+          <h2 style="font-family: 'Outfit'; margin: 0 0 10px 0;">Connect Phone Wireless</h2>
+          <p style="color: var(--text-secondary); margin: 0;">Scan the QR code below using your phone's camera to instantly stream video to your PC.</p>
+          
+          <div class="qr-box" id="qr-container">
+            <div class="loading-spinner" id="loading-spinner"></div>
+          </div>
+          
+          <div id="status-container">
+            <div class="status-text" id="status-text">Generating secure tunnel...</div>
+          </div>
+          
+          <div class="url-display" id="url-display" style="display: none;"></div>
+        </div>
+
+        <!-- Right Side: Live Preview -->
+        <div class="live-preview-container">
+          <h3 class="live-preview-title">
+            <span class="material-icons-round" style="color: rgb(251,146,60);">live_tv</span>
+            Live Preview
+          </h3>
+          <div class="live-preview-box">
+            <div class="live-preview-placeholder" id="preview-placeholder">
+              <span class="material-icons-round" style="font-size: 48px;">videocam_off</span>
+              <span>Waiting for connection...</span>
+            </div>
+            <img id="live-img" alt="Live Feed">
+          </div>
+          <button class="btn-proceed" id="btn-proceed" style="display: none;">
+            <span class="material-icons-round">fiber_manual_record</span>
+            Enter Full Screen & Record
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../scripts/camera_wireless_setup.js"></script>
+</body>
+</html>

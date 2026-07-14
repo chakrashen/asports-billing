@@ -197,4 +197,111 @@ try {
   db.exec("ALTER TABLE shopify_synced_orders ADD COLUMN shopify_updated_at TEXT");
 } catch (e) { }
 
+// ─── Inventory Management System ────────────────────────────
+
+// Product Master — product information only, no stock quantity stored
+db.exec(`
+  CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    brand TEXT,
+    category TEXT,
+    purchase_price REAL DEFAULT 0,
+    selling_price REAL DEFAULT 0,
+    gst_percent REAL DEFAULT 0,
+    description TEXT,
+    barcode_prefix TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
+  CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand);
+  CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+`);
+
+// Inventory Items — each physical item with a unique barcode
+db.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    barcode TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'IN_STOCK',
+    purchase_price REAL DEFAULT 0,
+    selling_price REAL DEFAULT 0,
+    purchase_date TEXT,
+    sale_date TEXT,
+    invoice_id INTEGER,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    FOREIGN KEY (invoice_id) REFERENCES sales_invoices(id)
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_barcode ON inventory_items(barcode);
+  CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory_items(product_id);
+  CREATE INDEX IF NOT EXISTS idx_inventory_status ON inventory_items(status);
+  CREATE INDEX IF NOT EXISTS idx_inventory_invoice ON inventory_items(invoice_id);
+`);
+
+// Inventory Movements — immutable transaction log for every inventory action
+db.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inventory_item_id INTEGER NOT NULL,
+    movement_type TEXT NOT NULL,
+    invoice_id INTEGER,
+    remarks TEXT,
+    user_name TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id),
+    FOREIGN KEY (invoice_id) REFERENCES sales_invoices(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_movements_item ON inventory_movements(inventory_item_id);
+  CREATE INDEX IF NOT EXISTS idx_movements_type ON inventory_movements(movement_type);
+  CREATE INDEX IF NOT EXISTS idx_movements_date ON inventory_movements(created_at);
+  CREATE INDEX IF NOT EXISTS idx_movements_invoice ON inventory_movements(invoice_id);
+`);
+
+// ─── CCTV / IP Camera Management ────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cctv_cameras (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    rtsp_url TEXT NOT NULL,
+    username TEXT,
+    password TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_cctv_name ON cctv_cameras(name);
+`);
+
+// ─── Video Recordings ───────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS recordings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_type TEXT NOT NULL,
+    camera_name TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT,
+    duration_seconds INTEGER DEFAULT 0,
+    file_path TEXT,
+    file_size INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'RECORDING',
+    cctv_camera_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (cctv_camera_id) REFERENCES cctv_cameras(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_recordings_source ON recordings(source_type);
+  CREATE INDEX IF NOT EXISTS idx_recordings_status ON recordings(status);
+  CREATE INDEX IF NOT EXISTS idx_recordings_date ON recordings(created_at);
+  CREATE INDEX IF NOT EXISTS idx_recordings_camera ON recordings(cctv_camera_id);
+`);
+
+// Migration: Add invoice_id to recordings to link recordings to specific invoices
+try {
+  db.exec("ALTER TABLE recordings ADD COLUMN invoice_id INTEGER");
+} catch (e) { }
+
 module.exports = db;

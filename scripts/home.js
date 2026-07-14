@@ -37,7 +37,9 @@ const navMap = {
   'btn-update': 'bill.html',
   'btn-history': 'dashboard.html',
   'btn-ledger': 'ledger.html',
-  'btn-stock': 'supplier_ledger.html'
+  'btn-stock': 'supplier_ledger.html',
+  'btn-inventory': 'inventory.html',
+  'btn-camera': 'camera.html'
 };
 
 Object.entries(navMap).forEach(([id, url]) => {

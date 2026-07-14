@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Camera & Recording — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/camera.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+
+<body>
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+  <div class="bg-glow bg-glow--3"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back to Home">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">videocam</span>
+          <div>
+            <h1 class="header__title">Camera & Recording</h1>
+            <p class="header__subtitle">ASPORTS ZONE</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="cam-main">
+      <div class="cam-hero">
+        <h2 class="cam-hero__heading">Select Camera Source<span class="cam-hero__dot">.</span></h2>
+        <p class="cam-hero__sub">Choose a video source to start live preview and recording</p>
+      </div>
+
+      <div class="cam-source-grid" id="source-grid">
+        <!-- Webcam / USB Camera -->
+        <div class="cam-source-card cam-source-card--webcam" id="btn-webcam" tabindex="0" role="button">
+          <div class="cam-source-card__glow"></div>
+          <div class="cam-source-card__icon-wrap">
+            <span class="material-icons-round cam-source-card__icon">photo_camera</span>
+          </div>
+          <h3 class="cam-source-card__title">Webcam / USB Camera</h3>
+          <p class="cam-source-card__desc">Use your device's built-in or connected USB camera for live preview and recording</p>
+        </div>
+
+        <!-- CCTV / IP Camera -->
+        <div class="cam-source-card cam-source-card--cctv" id="btn-cctv" tabindex="0" role="button">
+          <div class="cam-source-card__glow"></div>
+          <div class="cam-source-card__icon-wrap">
+            <span class="material-icons-round cam-source-card__icon">linked_camera</span>
+          </div>
+          <h3 class="cam-source-card__title">CCTV / IP Camera</h3>
+          <p class="cam-source-card__desc">Connect to RTSP network cameras for live monitoring and video recording</p>
+        </div>
+
+        <!-- Wireless Phone Camera -->
+        <div class="cam-source-card cam-source-card--wireless" id="btn-wireless" tabindex="0" role="button">
+          <div class="cam-source-card__glow"></div>
+          <div class="cam-source-card__icon-wrap">
+            <span class="material-icons-round cam-source-card__icon">smartphone</span>
+          </div>
+          <h3 class="cam-source-card__title">Wireless Phone Camera</h3>
+          <p class="cam-source-card__desc">Scan a QR code to securely stream your phone's camera directly to your PC</p>
+        </div>
+      </div>
+
+      <!-- Recording History & Folder Links -->
+      <div style="display: flex; gap: 15px; margin-top: 20px;">
+        <div class="cam-history-link" id="btn-history" tabindex="0" role="button" style="flex: 1;">
+          <span class="material-icons-round">video_library</span>
+          <span>View Recording History</span>
+          <span class="material-icons-round" style="margin-left: auto; font-size: 18px;">arrow_forward</span>
+        </div>
+        <div class="cam-history-link" id="btn-open-folder" tabindex="0" role="button" style="flex: 1; background: rgba(168,85,247,0.05); border-color: rgba(168,85,247,0.15); color: var(--accent-purple);">
+          <span class="material-icons-round" style="color: var(--accent-purple);">folder_open</span>
+          <span>Open Saved Videos</span>
+          <span class="material-icons-round" style="margin-left: auto; font-size: 18px; color: var(--accent-purple);">launch</span>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../scripts/camera.js"></script>
+</body>
+
+</html>

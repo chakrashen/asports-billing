@@ -183,6 +183,40 @@
   overflow: visible !important;
 }
 
+/* ─── Barcode Scanner ────────────────────────────────────── */
+.barcode-scan-row {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.barcode-scan-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 20px;
+  color: var(--accent-cyan);
+  z-index: 1;
+}
+
+.barcode-scan-input {
+  width: 100%;
+  padding: 14px 16px 14px 48px !important;
+  font-size: 1.05rem !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 500 !important;
+  letter-spacing: 1px;
+  border-radius: var(--radius-md) !important;
+  border: 1px solid var(--accent-cyan-dim) !important;
+  background: rgba(0, 229, 255, 0.03) !important;
+}
+
+.barcode-scan-input:focus {
+  border-color: var(--accent-cyan) !important;
+  background: rgba(0, 229, 255, 0.06) !important;
+  box-shadow: 0 0 0 4px var(--accent-cyan-dim) !important;
+}
+
 /* ─── Add Button ─────────────────────────────────────────── */
 .btn-add {
   display: inline-flex;

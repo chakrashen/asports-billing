@@ -61,11 +61,13 @@ document.getElementById('customer-email').addEventListener('blur', (e) => {
 });
 
 // ─── Add Row ────────────────────────────────────────────────
-function addRow(product = '', qty = '', price = '') {
+function addRow(product = '', qty = '', price = '', barcode = null, gst = null) {
   rowId++;
   const tbody = document.getElementById('invoice-body');
   const tr = document.createElement('tr');
   tr.dataset.rowId = rowId;
+  if (barcode) tr.dataset.barcode = barcode;
+
 
   tr.innerHTML = `
     <td class="row-num">${1}</td>
@@ -82,7 +84,7 @@ function addRow(product = '', qty = '', price = '') {
       <input type="number" class="table-input table-input--num input-price" placeholder="0.00" min="0" step="0.01" value="${price}">
     </td>
     <td>
-      <input type="number" class="table-input table-input--num input-gst" placeholder="0" min="0" max="100" step="0.01" value="0">
+      <input type="number" class="table-input table-input--num input-gst" placeholder="0" min="0" max="100" step="0.01" value="${gst !== null ? gst : '5'}">
     </td>
     <td class="row-total">₹ 0.00</td>
     <td>
@@ -149,6 +151,18 @@ function addRow(product = '', qty = '', price = '') {
 
   // Focus on product input
   productInput.focus();
+  
+  // Also check for last used GST on blur (for manual entry)
+  productInput.addEventListener('blur', async () => {
+    const productName = productInput.value.trim();
+    if (productName) {
+      const gstResult = await window.api.getLastProductGst(productName);
+      if (gstResult.success && gstResult.gst !== null) {
+        tr.querySelector('.input-gst').value = gstResult.gst;
+        updateRowTotal(tr);
+      }
+    }
+  });
 
   updateRowTotal(tr);
   updateGrandTotal();
@@ -204,10 +218,17 @@ function renderSuggestions(products, container, input, priceInput, tr) {
       </div>
     `;
 
-    item.addEventListener('click', () => {
+    item.addEventListener('click', async () => {
       input.value = product.title;
       priceInput.value = defaultPrice;
       container.style.display = 'none';
+
+      // Fetch last used GST for this specific product
+      const gstResult = await window.api.getLastProductGst(product.title);
+      if (gstResult.success && gstResult.gst !== null) {
+        tr.querySelector('.input-gst').value = gstResult.gst;
+      }
+
       updateRowTotal(tr);
     });
 
@@ -219,8 +240,9 @@ function renderSuggestions(products, container, input, priceInput, tr) {
 function updateRowTotal(tr) {
   const qty = parseFloat(tr.querySelector('.input-qty').value) || 0;
   const price = parseFloat(tr.querySelector('.input-price').value) || 0;
-  const gst = parseFloat(tr.querySelector('.input-gst').value) || 0;
-  const total = (qty * price) * (1 + gst / 100);
+  // Note: GST is now inclusive, so it doesn't affect the row total here, 
+  // but we still read it for calculations elsewhere.
+  const total = qty * price;
 
   tr.querySelector('.row-total').textContent = '₹ ' + total.toLocaleString('en-IN', {
     minimumFractionDigits: 2,
@@ -237,8 +259,7 @@ function updateGrandTotal() {
   rows.forEach(row => {
     const qty = parseFloat(row.querySelector('.input-qty').value) || 0;
     const price = parseFloat(row.querySelector('.input-price').value) || 0;
-    const gst = parseFloat(row.querySelector('.input-gst').value) || 0;
-    grandTotal += (qty * price) * (1 + gst / 100);
+    grandTotal += (qty * price);
   });
 
   const discountAmount = parseFloat(document.getElementById('discount-amount').value) || 0;
@@ -375,6 +396,7 @@ btnGenerate.addEventListener('click', async () => {
   }
 
   const items = [];
+  const barcodes = [];
   let hasError = false;
 
   rows.forEach(row => {
@@ -382,6 +404,7 @@ btnGenerate.addEventListener('click', async () => {
     const qty = parseInt(row.querySelector('.input-qty').value) || 0;
     const price = parseFloat(row.querySelector('.input-price').value) || 0;
     const gstPercent = parseFloat(row.querySelector('.input-gst').value) || 0;
+    const barcode = row.dataset.barcode || null;
 
     if (!product) {
       hasError = true;
@@ -407,7 +430,8 @@ btnGenerate.addEventListener('click', async () => {
       }, 2000);
     }
 
-    items.push({ product, qty, price, gstPercent });
+    items.push({ product, qty, price, gstPercent, barcode });
+    if (barcode) barcodes.push(barcode);
   });
 
   if (hasError) {
@@ -420,7 +444,7 @@ btnGenerate.addEventListener('click', async () => {
 
   const discountAmount = parseFloat(document.getElementById('discount-amount').value) || 0;
   const paidAmount = parseFloat(document.getElementById('paid-amount').value) || 0;
-  const subTotal = items.reduce((sum, item) => sum + (item.qty * item.price * (1 + item.gstPercent / 100)), 0);
+  const subTotal = items.reduce((sum, item) => sum + (item.qty * item.price), 0);
   const totalAmount = Math.max(0, subTotal - discountAmount);
   const dueAmount = totalAmount - paidAmount;
 
@@ -430,7 +454,9 @@ btnGenerate.addEventListener('click', async () => {
     email,
     address,
     items,
+    barcodes,
     invoiceNumber: nextInvoiceNumber,
+    totalAmount,
     paidAmount,
     dueAmount,
     discountAmount
@@ -462,8 +488,12 @@ function showInvoiceModal(data) {
   let itemsHtml = '';
 
   data.items.forEach((item, index) => {
-    const itemBaseTotal = item.qty * item.price;
-    const itemGstAmount = itemBaseTotal * (item.gstPercent / 100);
+    const itemTotalInclusive = item.qty * item.price;
+    const effectiveGst = Math.max(5, item.gstPercent); // Force minimum 5% for tax breakup
+    
+    const itemBaseTotal = itemTotalInclusive / (1 + effectiveGst / 100);
+    const itemGstAmount = itemTotalInclusive - itemBaseTotal;
+    
     totalBase += itemBaseTotal;
     totalTax += itemGstAmount;
     itemsHtml += `
@@ -472,8 +502,8 @@ function showInvoiceModal(data) {
         <td style="padding: 6px; border-right: 1px solid #000; border-bottom: 0; text-align: center;">-</td>
         <td style="padding: 6px; border-right: 1px solid #000; border-bottom: 0; text-align: center;">${item.qty}</td>
         <td style="padding: 6px; border-right: 1px solid #000; border-bottom: 0; text-align: right;">${item.price.toFixed(2)}</td>
-        <td style="padding: 6px; border-right: 1px solid #000; border-bottom: 0; text-align: right;">${item.gstPercent}%</td>
-        <td style="padding: 6px; border-bottom: 0; text-align: right;">${itemBaseTotal.toFixed(2)}</td>
+        <td style="padding: 6px; border-right: 1px solid #000; border-bottom: 0; text-align: right;">${effectiveGst}%</td>
+        <td style="padding: 6px; border-bottom: 0; text-align: right;">${itemTotalInclusive.toFixed(2)}</td>
       </tr>
     `;
   });
@@ -883,3 +913,82 @@ document.addEventListener('keydown', (e) => {
 
 // ─── Initialize with one empty row ─────────────────────────
 addRow();
+
+// ─── Barcode Scanner Logic for Inventory ───────────────────
+const barcodeInput = document.getElementById('barcode-scan-input');
+if (barcodeInput) {
+  let scanTimeout;
+
+  barcodeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const barcode = barcodeInput.value.trim();
+      if (barcode) performBillScan(barcode);
+    }
+  });
+
+  // Handle rapid scanner input
+  barcodeInput.addEventListener('input', () => {
+    clearTimeout(scanTimeout);
+    scanTimeout = setTimeout(() => {
+      // Allow Enter to handle it
+    }, 100);
+  });
+}
+
+async function performBillScan(barcode) {
+  const result = await window.api.inventoryBillScan(barcode);
+  
+  if (!result.success) {
+    showToast(`Error scanning: ${result.error}`, 'error');
+    return;
+  }
+
+  if (!result.found) {
+    showToast(`Barcode "${barcode}" not found in inventory`, 'error');
+    return;
+  }
+
+  if (!result.available) {
+    showToast(`Cannot bill this item: ${result.reason}`, 'error');
+    return;
+  }
+
+  const item = result.item;
+  
+  // Check if this barcode is already added to the invoice
+  const existingRows = document.querySelectorAll('#invoice-body tr');
+  for (const row of existingRows) {
+    if (row.dataset.barcode === barcode) {
+      showToast(`Barcode "${barcode}" is already added to this invoice`, 'error');
+      barcodeInput.value = '';
+      return;
+    }
+  }
+
+  // Check if there is an empty row (product name is empty and qty is 0 or 1)
+  let targetRow = null;
+  for (const row of existingRows) {
+    const product = row.querySelector('.input-product').value.trim();
+    if (product === '') {
+      targetRow = row;
+      break;
+    }
+  }
+
+  if (!targetRow) {
+    addRow(item.product_name, 1, item.product_selling_price || 0, barcode, item.product_gst || 5);
+  } else {
+    targetRow.querySelector('.input-product').value = item.product_name;
+    targetRow.querySelector('.input-price').value = item.product_selling_price || 0;
+    targetRow.querySelector('.input-qty').value = 1;
+    targetRow.querySelector('.input-gst').value = item.product_gst || 5;
+    targetRow.dataset.barcode = barcode;
+    updateRowTotal(targetRow);
+    updateGrandTotal();
+  }
+
+  showToast(`Added ${item.product_name} to invoice`);
+  barcodeInput.value = '';
+  barcodeInput.focus();
+}

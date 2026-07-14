@@ -196,10 +196,11 @@ function renderInvoices(invoices) {
 
   container.innerHTML = `
     <div class="invoice-directory-table" style="width:100%; background: rgba(18, 20, 45, 0.4); border-radius: 16px; border: 1px solid var(--border-subtle); overflow: visible;">
-      <div class="table-header" style="display: grid; grid-template-columns: 140px 1fr 100px 150px 140px 80px; padding: 18px 24px; background: #0d0d21; border-bottom: 1px solid var(--border-subtle); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 10; border-radius: 16px 16px 0 0;">
+      <div class="table-header" style="display: grid; grid-template-columns: 140px 1fr 100px 60px 150px 140px 80px; padding: 18px 24px; background: #0d0d21; border-bottom: 1px solid var(--border-subtle); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 10; border-radius: 16px 16px 0 0;">
         <div>Invoice No.</div>
         <div>Customer Name</div>
         <div style="text-align: center;">Source</div>
+        <div style="text-align: center;">QR</div>
         <div style="text-align: right;">Amount</div>
         <div style="text-align: center;">Action</div>
         <div style="text-align: center;">Delete</div>
@@ -211,10 +212,15 @@ function renderInvoices(invoices) {
     const isShopify = shopifySyncedIds.has(inv.id);
     const shopifyBadge = isShopify ? `<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(150,191,72,0.15);color:#96bf48;border:1px solid rgba(150,191,72,0.3);padding:2px 8px;border-radius:6px;font-size:0.65rem;font-weight:800;letter-spacing:0.03em;margin-right:8px;vertical-align:middle;"><svg width="12" height="12" viewBox="0 0 256 292" style="flex-shrink:0;"><path d="M223.8 57.5s-4.9-1.3-16.2 3.3c-5.4-15.4-14.9-29.6-31.6-29.6h-1.5c-4.7-6.1-10.6-8.8-15.7-8.8-38.8 0-57.5 48.5-63.3 73.2l-27.2 8.4c-8.5 2.7-8.8 2.9-9.9 10.9L42 241.7 168 268l72.5-15.6S223.9 57.8 223.8 57.5z" fill="#96bf48"/></svg>Shopify</span>` : '';
     return `
-            <div class="invoice-directory-row" style="display: grid; grid-template-columns: 140px 1fr 100px 150px 140px 80px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center; transition: background 0.2s ease;">
+            <div class="invoice-directory-row" style="display: grid; grid-template-columns: 140px 1fr 100px 60px 150px 140px 80px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center; transition: background 0.2s ease;">
               <div style="font-weight: 800; color: var(--accent-cyan); font-family: 'Outfit', sans-serif;">${invNum}</div>
               <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(inv.customer_name)}</div>
               <div style="text-align: center;">${shopifyBadge}</div>
+              <div style="text-align: center; position: relative;">
+                <button onclick="toggleQrMenu(event, ${inv.id})" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='#fff'" onmouseout="this.style.background='none'; this.style.color='var(--text-secondary)'" title="Recording Options">
+                  <span class="material-icons-round" style="font-size: 20px;">qr_code_2</span>
+                </button>
+              </div>
               <div style="text-align: right; font-weight: 700; color: var(--text-primary); font-family: 'Outfit', sans-serif;">₹ ${amountStr}</div>
               <div style="text-align: center;">
                 <button onclick="openInvoiceModal(${inv.id})" style="background: var(--accent-cyan-dim); color: var(--accent-cyan); border: 1px solid rgba(0, 229, 255, 0.2); padding: 6px 12px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; transition: all 0.2s ease;" onmouseover="this.style.background='var(--accent-cyan)'; this.style.color='#000'" onmouseout="this.style.background='var(--accent-cyan-dim)'; this.style.color='var(--accent-cyan)'">
@@ -1147,3 +1153,74 @@ if (window.api.onShopifyOrdersSynced) {
     loadCustomers();
   });
 }
+
+// ─── QR & Video Popup Logic ─────────────────────────────────
+let activeInvoiceId = null;
+const qrPopupMenu = document.getElementById('qr-popup-menu');
+
+function toggleQrMenu(event, invoiceId) {
+  event.stopPropagation();
+  activeInvoiceId = invoiceId;
+  const rect = event.currentTarget.getBoundingClientRect();
+  
+  // Position menu below the button
+  qrPopupMenu.style.top = `${rect.bottom + window.scrollY + 5}px`;
+  qrPopupMenu.style.left = `${rect.left + window.scrollX - 40}px`;
+  qrPopupMenu.classList.add('show');
+}
+
+// Close menu when clicking outside
+document.addEventListener('click', () => {
+  if (qrPopupMenu.classList.contains('show')) {
+    qrPopupMenu.classList.remove('show');
+  }
+});
+qrPopupMenu.addEventListener('click', (e) => e.stopPropagation());
+
+document.getElementById('qr-popup-btn-new').addEventListener('click', () => {
+  if (activeInvoiceId) {
+    window.location.href = `camera_wireless_setup.html?invoiceId=${activeInvoiceId}`;
+  }
+});
+
+document.getElementById('qr-popup-btn-video').addEventListener('click', async () => {
+  qrPopupMenu.classList.remove('show');
+  if (!activeInvoiceId) return;
+  
+  const result = await window.api.recordingGetByInvoice(activeInvoiceId);
+  if (result && result.success && result.recording) {
+    const rec = result.recording;
+    document.getElementById('player-title').textContent = `Invoice #${activeInvoiceId} Recording`;
+    const videoEl = document.getElementById('player-video');
+    
+    // Request file data from main process to play
+    const fileResult = await window.api.recordingReadFile(rec.file_path);
+    if (fileResult && fileResult.success) {
+      videoEl.src = `data:${fileResult.mime};base64,${fileResult.data}`;
+      document.getElementById('player-overlay').classList.add('show');
+      videoEl.play();
+    } else {
+      alert('Video file could not be loaded or was deleted.');
+    }
+  } else {
+    alert('No recording found for this invoice. Scan the QR code to create one!');
+  }
+});
+
+// ─── Video Player Modal Close ──────────────────────────────
+const playerOverlay = document.getElementById('player-overlay');
+const playerCloseBtn = document.getElementById('player-close');
+const playerVideo = document.getElementById('player-video');
+
+function closePlayer() {
+  playerOverlay.classList.remove('show');
+  playerVideo.pause();
+  playerVideo.src = '';
+  playerVideo.removeAttribute('src');
+  playerVideo.load();
+}
+
+playerCloseBtn.addEventListener('click', closePlayer);
+playerOverlay.addEventListener('click', (e) => {
+  if (e.target === playerOverlay) closePlayer();
+});

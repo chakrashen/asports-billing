@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recording History — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/camera.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+
+<body>
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+  <div class="bg-glow bg-glow--3"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Back">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round">video_library</span>
+          <div>
+            <h1 class="header__title">Recording History</h1>
+            <p class="header__subtitle">ASPORTS ZONE</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="rec-history-main">
+      <!-- Toolbar -->
+      <div class="rec-toolbar">
+        <div class="rec-toolbar__left">
+          <span class="rec-toolbar__count" id="rec-count">0 recordings</span>
+          <select class="rec-filter-select" id="rec-filter">
+            <option value="all">All Sources</option>
+            <option value="WEBCAM">Webcam Only</option>
+            <option value="CCTV">CCTV Only</option>
+          </select>
+        </div>
+        <button class="btn btn--secondary" id="btn-open-folder">
+          <span class="material-icons-round">folder_open</span>
+          Open Folder
+        </button>
+      </div>
+
+      <!-- Recordings List -->
+      <div class="rec-list" id="rec-list">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Empty State -->
+      <div class="rec-empty" id="rec-empty" style="display: none;">
+        <span class="material-icons-round">video_library</span>
+        <p style="font-weight: 600; margin-bottom: 4px; color: var(--text-secondary);">No Recordings Yet</p>
+        <p>Start recording from a webcam or CCTV camera to see your videos here.</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- Video Player Modal -->
+  <div class="player-overlay" id="player-overlay">
+    <div class="player-modal">
+      <div class="player-modal__header">
+        <span class="player-modal__title" id="player-title">Recording Playback</span>
+        <button class="player-modal__close" id="player-close" title="Close">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      <video class="player-modal__video" id="player-video" controls></video>
+      <div class="player-modal__details" id="player-details">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Dialog -->
+  <div class="confirm-overlay" id="confirm-overlay">
+    <div class="confirm-dialog">
+      <div class="confirm-dialog__icon">
+        <span class="material-icons-round">delete_forever</span>
+      </div>
+      <h3 class="confirm-dialog__title">Delete Recording?</h3>
+      <p class="confirm-dialog__msg" id="confirm-msg">This will permanently delete the recording and its video file. This action cannot be undone.</p>
+      <div class="confirm-dialog__actions">
+        <button class="btn btn--secondary" id="confirm-cancel">Cancel</button>
+        <button class="btn btn--primary" id="confirm-delete" style="background: linear-gradient(135deg, #f43f5e, #e11d48); box-shadow: 0 4px 20px rgba(244,63,94,0.25);">
+          <span class="material-icons-round">delete</span>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="cam-toast" id="cam-toast">
+    <span class="material-icons-round cam-toast__icon" id="toast-icon">check_circle</span>
+    <span id="toast-text">Done</span>
+  </div>
+
+  <script src="../scripts/camera_history.js"></script>
+</body>
+
+</html>

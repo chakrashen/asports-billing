@@ -12,6 +12,79 @@
     rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   <style>
+    /* QR Popup Menu */
+    .qr-popup-menu {
+      position: absolute;
+      background: #1a1c35;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      padding: 6px;
+      min-width: 140px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-10px);
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .qr-popup-menu.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+    .qr-popup-menu__item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.2s ease;
+    }
+    .qr-popup-menu__item:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .qr-popup-menu__item .material-icons-round {
+      font-size: 18px;
+      color: var(--accent-cyan);
+    }
+
+    /* Video Player Modal */
+    .player-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px);
+      z-index: 9999; display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    }
+    .player-overlay.show { opacity: 1; pointer-events: auto; }
+    .player-modal {
+      background: #0d0d21; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1);
+      width: 90%; max-width: 1000px; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+      display: flex; flex-direction: column; overflow: hidden;
+      transform: translateY(20px) scale(0.95); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .player-overlay.show .player-modal { transform: translateY(0) scale(1); }
+    .player-modal__header {
+      padding: 20px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .player-modal__title { font-size: 1.25rem; font-weight: 700; font-family: 'Outfit', sans-serif; color: white; }
+    .player-modal__close {
+      background: rgba(255, 255, 255, 0.05); border: none; color: white; border-radius: 50%;
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.2s ease;
+    }
+    .player-modal__close:hover { background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); transform: rotate(90deg); }
+    .player-modal__video { width: 100%; max-height: 65vh; background: #000; outline: none; }
+
     html,
     body {
       height: 100vh;
@@ -687,6 +760,31 @@
           Close
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Shared QR Popup Menu -->
+  <div class="qr-popup-menu" id="qr-popup-menu">
+    <button class="qr-popup-menu__item" id="qr-popup-btn-new">
+      <span class="material-icons-round">qr_code_scanner</span>
+      QR (New Recording)
+    </button>
+    <button class="qr-popup-menu__item" id="qr-popup-btn-video">
+      <span class="material-icons-round">play_circle</span>
+      Play Video
+    </button>
+  </div>
+
+  <!-- Video Player Modal -->
+  <div class="player-overlay" id="player-overlay">
+    <div class="player-modal">
+      <div class="player-modal__header">
+        <span class="player-modal__title" id="player-title">Invoice Recording</span>
+        <button class="player-modal__close" id="player-close" title="Close">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      <video class="player-modal__video" id="player-video" controls></video>
     </div>
   </div>
 

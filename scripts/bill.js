@@ -35,7 +35,7 @@ document.getElementById('btn-open-folder').addEventListener('click', async () =>
   }
 });
 
-function addRow(product = '', qty = '', rate = '', gst = '0') {
+function addRow(product = '', qty = '', rate = '', gst = '5') {
   rowId++;
   const tbody = document.getElementById('bill-body');
   const tr = document.createElement('tr');
@@ -71,10 +71,16 @@ function addRow(product = '', qty = '', rate = '', gst = '0') {
 function recalcRow(tr) {
   const qty = parseFloat(tr.querySelector('.item-qty').value) || 0;
   const rate = parseFloat(tr.querySelector('.item-rate').value) || 0;
-  const gst = parseFloat(tr.querySelector('.item-gst').value) || 0;
-  const baseAmount = qty * rate;
-  const gstAmount = baseAmount * (gst / 100);
-  const totalAmount = baseAmount + gstAmount;
+  let gst = parseFloat(tr.querySelector('.item-gst').value) || 0;
+  
+  // Inclusive GST logic: rate is the total price per unit
+  const totalAmount = qty * rate;
+  
+  // Back-calculate GST for display/data purposes
+  const effectiveGst = Math.max(5, gst);
+  const baseAmount = totalAmount / (1 + effectiveGst / 100);
+  const gstAmount = totalAmount - baseAmount;
+  
   tr.querySelector('.row-total').textContent = totalAmount.toFixed(2);
   tr.dataset.gstAmount = gstAmount.toFixed(2);
   recalculateTotals();
@@ -441,7 +447,7 @@ async function handleUploadFile(file) {
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const page = await pdf.getPage(1);
       
-      const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better OCR
+      const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for maximum OCR precision
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
       canvas.height = viewport.height;
@@ -449,7 +455,7 @@ async function handleUploadFile(file) {
 
       await page.render({ canvasContext: context, viewport: viewport }).promise;
       
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       previewImage.src = dataUrl;
       
       // We need a path for the backend, but since it's a dataURL from PDF, 

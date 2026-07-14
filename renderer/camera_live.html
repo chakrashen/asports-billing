@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Camera — ASPORTS ZONE</title>
+  <link rel="stylesheet" href="../styles/global.css">
+  <link rel="stylesheet" href="../styles/camera.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+
+<body>
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+  <div class="bg-glow bg-glow--3"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header" id="app-header">
+      <div class="header__left">
+        <button class="btn-back" id="btn-back" title="Go Back">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="header__brand">
+          <span class="header__icon material-icons-round" id="header-icon">videocam</span>
+          <div>
+            <h1 class="header__title" id="header-title">Live Camera</h1>
+            <p class="header__subtitle">ASPORTS ZONE</p>
+          </div>
+        </div>
+      </div>
+      <div class="header__meta">
+        <span class="header__date" id="header-date"></span>
+        <span class="header__time" id="header-time"></span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="live-container">
+      <!-- Top bar with camera info and status -->
+      <div class="live-top-bar">
+        <div class="live-camera-info">
+          <div class="live-camera-info__icon" id="cam-info-icon">
+            <span class="material-icons-round">videocam</span>
+          </div>
+          <div>
+            <div class="live-camera-info__name" id="cam-name">Camera</div>
+            <div class="live-camera-info__source" id="cam-source">WEBCAM</div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="status-badge status-badge--connecting" id="status-badge">
+            <span class="status-badge__dot"></span>
+            <span id="status-text">CONNECTING</span>
+          </div>
+          <!-- Camera switch (webcam only) -->
+          <button class="btn-cam-switch" id="btn-switch-camera" title="Switch Camera" style="display: none;">
+            <span class="material-icons-round">cameraswitch</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div class="live-error" id="error-msg">
+        <span class="material-icons-round">error_outline</span>
+        <span id="error-text">An error occurred</span>
+      </div>
+
+      <!-- Video Preview -->
+      <div class="live-video-wrap" id="video-wrap">
+        <video id="video-preview" autoplay playsinline muted></video>
+        <img id="cctv-preview" style="display: none;" alt="CCTV Feed">
+        <div class="live-video-wrap__placeholder" id="video-placeholder">
+          <span class="material-icons-round">videocam_off</span>
+          <p>Connecting to camera...</p>
+        </div>
+        <!-- Recording indicator overlay -->
+        <div class="live-rec-indicator" id="rec-indicator">
+          <div class="live-rec-indicator__dot"></div>
+          <span>REC</span>
+          <span id="rec-indicator-timer">00:00:00</span>
+        </div>
+        <!-- Hidden canvas for wireless recording -->
+        <canvas id="wireless-canvas" style="display: none;"></canvas>
+      </div>
+
+      <!-- Controls -->
+      <div class="live-controls">
+        <div class="live-timer" id="rec-timer">00:00:00</div>
+        <button class="btn-record btn-record--start" id="btn-record">
+          <span class="material-icons-round">fiber_manual_record</span>
+          <span id="btn-record-text">Start Recording</span>
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast -->
+  <div class="cam-toast" id="cam-toast">
+    <span class="material-icons-round cam-toast__icon" id="toast-icon">check_circle</span>
+    <span id="toast-text">Recording saved</span>
+  </div>
+
+  <script src="../scripts/camera_live.js"></script>
+</body>
+
+</html>

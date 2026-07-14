@@ -57,6 +57,8 @@
 .card:nth-child(4) { animation-delay: 0.25s; }
 .card:nth-child(5) { animation-delay: 0.3s; }
 .card:nth-child(6) { animation-delay: 0.35s; }
+.card:nth-child(7) { animation-delay: 0.4s; }
+.card:nth-child(8) { animation-delay: 0.45s; }
 
 .card__glow {
   position: absolute;
@@ -92,6 +94,13 @@
 .card--stock .card__glow {
   background: radial-gradient(circle at 30% 30%, rgba(252,211,77,0.06) 0%, transparent 60%);
 }
+.card--inventory .card__glow {
+  background: radial-gradient(circle at 30% 30%, rgba(56, 189, 248, 0.08) 0%, transparent 60%);
+}
+.card--camera .card__glow {
+  background: radial-gradient(circle at 30% 30%, rgba(16, 185, 129, 0.08) 0%, transparent 60%);
+}
+
 
 .card:hover {
   transform: translateY(-4px);
@@ -129,6 +138,16 @@
   box-shadow: 0 8px 40px rgba(252,211,77,0.08);
 }
 
+.card--inventory:hover {
+  border-color: rgba(56, 189, 248, 0.2);
+  box-shadow: 0 8px 40px rgba(56, 189, 248, 0.08);
+}
+
+.card--camera:hover {
+  border-color: rgba(16, 185, 129, 0.2);
+  box-shadow: 0 8px 40px rgba(252,211,77,0.08);
+}
+
 .card__icon-wrap {
   display: flex;
   align-items: center;
@@ -159,6 +178,9 @@
 .card--ledger .card__icon-wrap {
   background: var(--accent-rose-dim);
 }
+.card--camera .card__icon-wrap {
+  background: rgba(16, 185, 129, 0.15);
+}
 .card--stock .card__icon-wrap {
   background: var(--accent-amber-dim);
 }
@@ -173,6 +195,7 @@
 .card--history .card__icon { color: var(--accent-orange); }
 .card--ledger .card__icon { color: var(--accent-rose); }
 .card--stock .card__icon { color: var(--accent-amber); }
+.card--camera .card__icon { color: #10b981; }
 
 .card__title {
   font-family: 'Outfit', sans-serif;
@@ -245,6 +268,15 @@
 .card--stock:hover .card__arrow {
   background: var(--accent-amber-dim);
   color: var(--accent-amber);
+}
+
+.card--inventory:hover .card__arrow {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+.card--camera:hover .card__arrow {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
 }
 
 .card__arrow .material-icons-round {
