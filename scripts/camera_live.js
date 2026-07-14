@@ -126,7 +126,8 @@ function getUrlParams() {
   return {
     source: params.get('source') || 'webcam',
     cameraId: params.get('cameraId') ? parseInt(params.get('cameraId')) : null,
-    invoiceId: params.get('invoiceId') ? parseInt(params.get('invoiceId')) : null
+    invoiceId: params.get('invoiceId') ? parseInt(params.get('invoiceId')) : null,
+    autoRecord: params.get('autoRecord') === 'true'
   };
 }
 
@@ -351,6 +352,12 @@ function startWebcamRecording() {
         if (result.success) {
           setStatus('SAVED');
           showToast(`Recording saved (${formatFileSize(result.fileSize)})`);
+          
+          if (invoiceId) {
+            setTimeout(() => {
+              window.location.href = `customers.html?playInvoiceId=${invoiceId}`;
+            }, 1500);
+          }
         } else {
           setStatus('ERROR');
           showError('Failed to save recording: ' + result.error);
@@ -697,6 +704,14 @@ document.addEventListener('visibilitychange', () => {
     // We repurpose the CCTV recording pipeline since we just stream frames
     cctvCameraId = 'WIRELESS'; 
     await startWirelessStream();
+    
+    if (params.autoRecord) {
+      setTimeout(() => {
+        if (!isRecording && statusText.textContent === 'LIVE') {
+          startRecording();
+        }
+      }, 1000);
+    }
   } else {
     // Webcam mode
     camSource.textContent = 'WEBCAM';

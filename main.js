@@ -4601,6 +4601,18 @@ ipcMain.handle('recording-get-by-invoice', async (event, invoiceId) => {
   }
 });
 
+ipcMain.handle('recording-get-all-by-invoice', async (event, invoiceId) => {
+  try {
+    const recordings = db.prepare(
+      `SELECT r.*, c.name as cctv_name FROM recordings r LEFT JOIN cctv_cameras c ON r.cctv_camera_id = c.id WHERE r.invoice_id = ? AND r.status != 'DELETED' ORDER BY r.created_at DESC`
+    ).all(invoiceId);
+    return { success: true, recordings };
+  } catch (error) {
+    console.error('Error fetching all recordings by invoice:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('recording-get-all', async () => {
   try {
     const recordings = db.prepare(
@@ -4734,8 +4746,7 @@ ipcMain.handle('wireless-start-server', async (event) => {
     #btn-stop { background: #475569; display: none; }
     #btn-switch { background: #3b82f6; display: none; }
     #btn-record { background: #10b981; display: none; }
-    #btn-record.recording { background: #f43f5e; animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+    #btn-record.recording { background: #f43f5e; }
     .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 20; text-align: center; padding: 20px; flex-direction: column; gap: 20px;}
     #btn-start { background: #10b981; padding: 20px 40px; font-size: 20px; max-width: 300px; }
   </style>
@@ -4767,6 +4778,7 @@ ipcMain.handle('wireless-start-server', async (event) => {
     let facingMode = 'environment';
     let isStreaming = false;
     let isRecording = false;
+    let isSendingFrame = false;
 
     async function startCamera() {
       try {
@@ -4790,7 +4802,8 @@ ipcMain.handle('wireless-start-server', async (event) => {
     function sendFrames() {
       if (frameInterval) clearInterval(frameInterval);
       frameInterval = setInterval(async () => {
-        if (!isStreaming || video.videoWidth === 0) return;
+        if (!isStreaming || video.videoWidth === 0 || isSendingFrame) return;
+        isSendingFrame = true;
         
         // Scale down the video to max 640px width for ultra-fast streaming
         const maxWidth = 640;
@@ -4818,8 +4831,10 @@ ipcMain.handle('wireless-start-server', async (event) => {
           });
         } catch (e) {
           console.error("Frame send error", e);
+        } finally {
+          isSendingFrame = false;
         }
-      }, 1000 / 15); // Increased to 15 fps for smoother motion now that frames are tiny
+      }, 1000 / 24); // 24 fps target
     }
 
     btnStart.onclick = startCamera;

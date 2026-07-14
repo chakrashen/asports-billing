@@ -38,7 +38,8 @@ async function initializeServer() {
       const url = response.url;
       
       // Generate QR Code using a fast public API
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`;
+      const cacheBustUrl = url + '?cb=' + Date.now();
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(cacheBustUrl)}`;
       
       // Update UI
       qrContainer.innerHTML = `<img src="${qrUrl}" alt="QR Code for Phone Camera">`;
@@ -70,6 +71,19 @@ async function initializeServer() {
           document.getElementById('preview-placeholder').style.display = 'flex';
           document.getElementById('live-img').style.display = 'none';
           document.getElementById('btn-proceed').style.display = 'none';
+        }
+      });
+
+      // Listen for remote record start
+      window.api.onWirelessRecordTrigger && window.api.onWirelessRecordTrigger((data) => {
+        if (data.action === 'start') {
+          const urlParams = new URLSearchParams(window.location.search);
+          const invoiceId = urlParams.get('invoiceId');
+          let nextUrl = 'camera_live.html?source=wireless&autoRecord=true';
+          if (invoiceId) {
+            nextUrl += `&invoiceId=${invoiceId}`;
+          }
+          window.location.href = nextUrl;
         }
       });
 

@@ -196,7 +196,7 @@ function renderInvoices(invoices) {
 
   container.innerHTML = `
     <div class="invoice-directory-table" style="width:100%; background: rgba(18, 20, 45, 0.4); border-radius: 16px; border: 1px solid var(--border-subtle); overflow: visible;">
-      <div class="table-header" style="display: grid; grid-template-columns: 140px 1fr 100px 60px 150px 140px 80px; padding: 18px 24px; background: #0d0d21; border-bottom: 1px solid var(--border-subtle); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 10; border-radius: 16px 16px 0 0;">
+      <div class="table-header" style="display: grid; grid-template-columns: 140px 1fr 85px 40px 120px 140px 80px; padding: 18px 24px; background: #0d0d21; border-bottom: 1px solid var(--border-subtle); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 10; border-radius: 16px 16px 0 0;">
         <div>Invoice No.</div>
         <div>Customer Name</div>
         <div style="text-align: center;">Source</div>
@@ -212,7 +212,7 @@ function renderInvoices(invoices) {
     const isShopify = shopifySyncedIds.has(inv.id);
     const shopifyBadge = isShopify ? `<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(150,191,72,0.15);color:#96bf48;border:1px solid rgba(150,191,72,0.3);padding:2px 8px;border-radius:6px;font-size:0.65rem;font-weight:800;letter-spacing:0.03em;margin-right:8px;vertical-align:middle;"><svg width="12" height="12" viewBox="0 0 256 292" style="flex-shrink:0;"><path d="M223.8 57.5s-4.9-1.3-16.2 3.3c-5.4-15.4-14.9-29.6-31.6-29.6h-1.5c-4.7-6.1-10.6-8.8-15.7-8.8-38.8 0-57.5 48.5-63.3 73.2l-27.2 8.4c-8.5 2.7-8.8 2.9-9.9 10.9L42 241.7 168 268l72.5-15.6S223.9 57.8 223.8 57.5z" fill="#96bf48"/></svg>Shopify</span>` : '';
     return `
-            <div class="invoice-directory-row" style="display: grid; grid-template-columns: 140px 1fr 100px 60px 150px 140px 80px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center; transition: background 0.2s ease;">
+            <div class="invoice-directory-row" style="display: grid; grid-template-columns: 140px 1fr 85px 40px 120px 140px 80px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center; transition: background 0.2s ease;">
               <div style="font-weight: 800; color: var(--accent-cyan); font-family: 'Outfit', sans-serif;">${invNum}</div>
               <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(inv.customer_name)}</div>
               <div style="text-align: center;">${shopifyBadge}</div>
@@ -1187,14 +1187,23 @@ document.getElementById('qr-popup-btn-video').addEventListener('click', async ()
   qrPopupMenu.classList.remove('show');
   if (!activeInvoiceId) return;
   
-  const result = await window.api.recordingGetByInvoice(activeInvoiceId);
-  if (result && result.success && result.recording) {
-    const rec = result.recording;
-    document.getElementById('player-title').textContent = `Invoice #${activeInvoiceId} Recording`;
-    const videoEl = document.getElementById('player-video');
-    
-    // Request file data from main process to play
-    const fileResult = await window.api.recordingReadFile(rec.file_path);
+  const result = await window.api.recordingGetAllByInvoice(activeInvoiceId);
+  if (result && result.success && result.recordings && result.recordings.length > 0) {
+    if (result.recordings.length === 1) {
+      playRecording(result.recordings[0]);
+    } else {
+      showRecordingSelection(result.recordings);
+    }
+  } else {
+    alert('No recording found for this invoice. Scan the QR code to create one!');
+  }
+});
+
+function playRecording(rec) {
+  document.getElementById('player-title').textContent = `Invoice #${activeInvoiceId} Recording`;
+  const videoEl = document.getElementById('player-video');
+  
+  window.api.recordingReadFile(rec.file_path).then(fileResult => {
     if (fileResult && fileResult.success) {
       videoEl.src = `data:${fileResult.mime};base64,${fileResult.data}`;
       document.getElementById('player-overlay').classList.add('show');
@@ -1202,10 +1211,65 @@ document.getElementById('qr-popup-btn-video').addEventListener('click', async ()
     } else {
       alert('Video file could not be loaded or was deleted.');
     }
-  } else {
-    alert('No recording found for this invoice. Scan the QR code to create one!');
-  }
-});
+  });
+}
+
+function showRecordingSelection(recordings) {
+  const overlay = document.createElement('div');
+  overlay.style.position = 'fixed';
+  overlay.style.inset = '0';
+  overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+  overlay.style.zIndex = '9999';
+  overlay.style.display = 'flex';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  
+  const modal = document.createElement('div');
+  modal.style.background = 'var(--bg-secondary)';
+  modal.style.padding = '20px';
+  modal.style.borderRadius = '12px';
+  modal.style.width = '350px';
+  modal.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+  
+  const title = document.createElement('h3');
+  title.textContent = 'Select Recording';
+  title.style.margin = '0 0 15px 0';
+  modal.appendChild(title);
+  
+  recordings.forEach((rec) => {
+    const btn = document.createElement('div');
+    btn.className = 'qr-popup-item';
+    btn.style.marginBottom = '10px';
+    btn.style.justifyContent = 'flex-start';
+    
+    let dateStr = 'Unknown date';
+    try {
+      dateStr = new Date(rec.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' });
+    } catch(e) {}
+    
+    // Convert bytes to MB
+    const mb = (rec.file_size / (1024 * 1024)).toFixed(1);
+    
+    btn.innerHTML = `<span class="material-icons-round">play_circle</span> <span style="font-size: 13px;">${dateStr} (${mb} MB)</span>`;
+    
+    btn.onclick = () => {
+      document.body.removeChild(overlay);
+      playRecording(rec);
+    };
+    modal.appendChild(btn);
+  });
+  
+  const cancelBtn = document.createElement('div');
+  cancelBtn.className = 'qr-popup-item';
+  cancelBtn.style.justifyContent = 'center';
+  cancelBtn.style.color = 'var(--status-error)';
+  cancelBtn.innerHTML = `Cancel`;
+  cancelBtn.onclick = () => document.body.removeChild(overlay);
+  
+  modal.appendChild(cancelBtn);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
 
 // ─── Video Player Modal Close ──────────────────────────────
 const playerOverlay = document.getElementById('player-overlay');
@@ -1223,4 +1287,14 @@ function closePlayer() {
 playerCloseBtn.addEventListener('click', closePlayer);
 playerOverlay.addEventListener('click', (e) => {
   if (e.target === playerOverlay) closePlayer();
+});
+
+// Auto-play on load if requested
+window.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const playInvoiceId = urlParams.get('playInvoiceId');
+  if (playInvoiceId) {
+    activeInvoiceId = parseInt(playInvoiceId);
+    document.getElementById('qr-popup-btn-video').click();
+  }
 });
