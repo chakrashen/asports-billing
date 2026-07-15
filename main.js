@@ -3152,12 +3152,25 @@ ipcMain.handle('get-last-product-gst', async (event, productName) => {
 
 ipcMain.handle('inventory-create-product', async (event, data) => {
   try {
-    const { name, brand, category, purchasePrice, sellingPrice, gstPercent, description, barcodePrefix } = data;
+    const { name, brand, category, purchasePrice, sellingPrice, gstPercent, description, barcodePrefix, universalBarcode } = data;
     const result = db.prepare(`
       INSERT INTO products (name, brand, category, purchase_price, selling_price, gst_percent, description, barcode_prefix)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(name, brand || null, category || null, purchasePrice || 0, sellingPrice || 0, gstPercent || 0, description || null, barcodePrefix || null);
-    return { success: true, productId: result.lastInsertRowid };
+    const productId = result.lastInsertRowid;
+    // Save universal barcode mapping if provided
+    if (universalBarcode && universalBarcode.trim()) {
+      const barcodeVal = universalBarcode.trim().toUpperCase();
+      // Check if barcode already belongs to another product
+      const existing = db.prepare('SELECT product_id FROM product_barcodes WHERE barcode = ?').get(barcodeVal);
+      if (existing && existing.product_id !== productId) {
+        // Roll back product creation would be complex; instead warn but product was created
+        console.warn('[Inventory] Universal barcode already mapped to another product:', barcodeVal);
+        return { success: true, productId, barcodeWarning: `Barcode "${barcodeVal}" is already assigned to another product. Product was created without barcode.` };
+      }
+      db.prepare(`INSERT OR REPLACE INTO product_barcodes (barcode, product_id, updated_at) VALUES (?, ?, datetime('now','localtime'))`).run(barcodeVal, productId);
+    }
+    return { success: true, productId };
   } catch (error) {
     console.error('[Inventory] Error creating product:', error);
     return { success: false, error: error.message };
@@ -3166,15 +3179,129 @@ ipcMain.handle('inventory-create-product', async (event, data) => {
 
 ipcMain.handle('inventory-update-product', async (event, data) => {
   try {
-    const { productId, name, brand, category, purchasePrice, sellingPrice, gstPercent, description, barcodePrefix } = data;
+    const { productId, name, brand, category, purchasePrice, sellingPrice, gstPercent, description, barcodePrefix, universalBarcode } = data;
     db.prepare(`
       UPDATE products SET name = ?, brand = ?, category = ?, purchase_price = ?, selling_price = ?,
         gst_percent = ?, description = ?, barcode_prefix = ?, updated_at = datetime('now','localtime')
       WHERE id = ?
     `).run(name, brand || null, category || null, purchasePrice || 0, sellingPrice || 0, gstPercent || 0, description || null, barcodePrefix || null, productId);
+    // Upsert universal barcode mapping
+    if (universalBarcode && universalBarcode.trim()) {
+      const barcodeVal = universalBarcode.trim().toUpperCase();
+      // Check if barcode already belongs to a DIFFERENT product
+      const existing = db.prepare('SELECT product_id FROM product_barcodes WHERE barcode = ?').get(barcodeVal);
+      if (existing && existing.product_id !== productId) {
+        return { success: false, error: `Barcode "${barcodeVal}" is already assigned to another product. Please use a different barcode.` };
+      }
+      // Remove any old barcode mapping for this product before inserting new
+      db.prepare('DELETE FROM product_barcodes WHERE product_id = ? AND barcode != ?').run(productId, barcodeVal);
+      db.prepare(`INSERT OR REPLACE INTO product_barcodes (barcode, product_id, updated_at) VALUES (?, ?, datetime('now','localtime'))`).run(barcodeVal, productId);
+    } else if (universalBarcode === '') {
+      // Explicitly clearing the barcode
+      db.prepare('DELETE FROM product_barcodes WHERE product_id = ?').run(productId);
+    }
     return { success: true };
   } catch (error) {
     console.error('[Inventory] Error updating product:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ── Universal Barcode Mapping ────────────────────────────────
+
+// Save or update a universal barcode → product mapping
+ipcMain.handle('inventory-set-product-barcode', async (event, { barcode, productId }) => {
+  try {
+    if (!barcode || !barcode.trim()) return { success: false, error: 'Barcode cannot be empty' };
+    if (!productId) return { success: false, error: 'Product ID is required' };
+    const barcodeVal = barcode.trim().toUpperCase();
+    // Verify product exists
+    const product = db.prepare('SELECT id FROM products WHERE id = ?').get(productId);
+    if (!product) return { success: false, error: 'Product not found' };
+    // Check for duplicates on OTHER products
+    const existing = db.prepare('SELECT product_id FROM product_barcodes WHERE barcode = ?').get(barcodeVal);
+    if (existing && existing.product_id !== productId) {
+      const conflictProduct = db.prepare('SELECT name FROM products WHERE id = ?').get(existing.product_id);
+      return { success: false, error: `Barcode "${barcodeVal}" is already assigned to "${conflictProduct?.name || 'another product'}"` };
+    }
+    // Remove old mapping for this product (one product = one universal barcode)
+    db.prepare('DELETE FROM product_barcodes WHERE product_id = ? AND barcode != ?').run(productId, barcodeVal);
+    db.prepare(`INSERT OR REPLACE INTO product_barcodes (barcode, product_id, updated_at) VALUES (?, ?, datetime('now','localtime'))`).run(barcodeVal, productId);
+    return { success: true };
+  } catch (error) {
+    console.error('[Inventory] Error setting product barcode:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Look up a product by its universal barcode (for Barcode Search tab)
+ipcMain.handle('inventory-lookup-barcode', async (event, barcode) => {
+  try {
+    if (!barcode || !barcode.trim()) return { success: false, error: 'Barcode cannot be empty' };
+    const barcodeVal = barcode.trim().toUpperCase();
+    // First check universal product_barcodes mapping
+    const mapping = db.prepare('SELECT * FROM product_barcodes WHERE barcode = ?').get(barcodeVal);
+    if (mapping) {
+      const product = db.prepare('SELECT * FROM products WHERE id = ?').get(mapping.product_id);
+      if (!product) return { success: true, found: false, barcode: barcodeVal, message: 'Barcode mapped to a deleted product' };
+      const inStock = db.prepare("SELECT COUNT(*) as cnt FROM inventory_items WHERE product_id = ? AND status = 'IN_STOCK'").get(product.id).cnt;
+      const totalItems = db.prepare('SELECT COUNT(*) as cnt FROM inventory_items WHERE product_id = ?').get(product.id).cnt;
+      const soldItems = db.prepare("SELECT COUNT(*) as cnt FROM inventory_items WHERE product_id = ? AND status = 'SOLD'").get(product.id).cnt;
+      return {
+        success: true,
+        found: true,
+        source: 'universal',
+        barcode: barcodeVal,
+        product: {
+          id: product.id,
+          name: product.name,
+          brand: product.brand,
+          category: product.category,
+          purchase_price: product.purchase_price,
+          selling_price: product.selling_price,
+          gst_percent: product.gst_percent,
+          description: product.description,
+          barcode_prefix: product.barcode_prefix,
+          in_stock: inStock,
+          total_items: totalItems,
+          sold: soldItems
+        }
+      };
+    }
+    // Fallback: check if it's a serial barcode (individual inventory item)
+    const item = db.prepare(`
+      SELECT ii.*, p.name as product_name, p.brand, p.category, p.gst_percent as product_gst,
+             p.purchase_price as product_purchase_price, p.selling_price as product_selling_price,
+             p.description as product_description
+      FROM inventory_items ii
+      JOIN products p ON ii.product_id = p.id
+      WHERE ii.barcode = ?
+    `).get(barcodeVal);
+    if (item) {
+      const inStock = db.prepare("SELECT COUNT(*) as cnt FROM inventory_items WHERE product_id = ? AND status = 'IN_STOCK'").get(item.product_id).cnt;
+      return {
+        success: true,
+        found: true,
+        source: 'serial',
+        barcode: barcodeVal,
+        item,
+        product: {
+          id: item.product_id,
+          name: item.product_name,
+          brand: item.brand,
+          category: item.category,
+          purchase_price: item.purchase_price,
+          selling_price: item.selling_price,
+          gst_percent: item.product_gst,
+          description: item.product_description,
+          in_stock: inStock,
+          item_status: item.status
+        }
+      };
+    }
+    return { success: true, found: false, barcode: barcodeVal };
+  } catch (error) {
+    console.error('[Inventory] Error looking up barcode:', error);
     return { success: false, error: error.message };
   }
 });
@@ -3208,6 +3335,10 @@ ipcMain.handle('inventory-get-products', async (event, filters = {}) => {
     query += ` ORDER BY p.name ASC`;
     const products = db.prepare(query).all(...params);
 
+    // Attach universal barcode to each product
+    const getBc = db.prepare('SELECT barcode FROM product_barcodes WHERE product_id = ? LIMIT 1');
+    products.forEach(p => { const bc = getBc.get(p.id); p.universal_barcode = bc ? bc.barcode : null; });
+
     // Also get distinct categories and brands for filter dropdowns
     const categories = db.prepare('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category').all().map(r => r.category);
     const brands = db.prepare('SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != "" ORDER BY brand').all().map(r => r.brand);
@@ -3223,6 +3354,8 @@ ipcMain.handle('inventory-get-product', async (event, productId) => {
   try {
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
     if (!product) return { success: false, error: 'Product not found' };
+    const bc = db.prepare('SELECT barcode FROM product_barcodes WHERE product_id = ? LIMIT 1').get(productId);
+    product.universal_barcode = bc ? bc.barcode : null;
     return { success: true, product };
   } catch (error) {
     console.error('[Inventory] Error fetching product:', error);
@@ -3707,30 +3840,62 @@ ipcMain.handle('inventory-get-product-details', async (event, productId) => {
 // ── Billing Integration ─────────────────────────────────────
 
 // Validate barcode for billing (must be IN_STOCK)
+// Checks: 1) Serial item barcode, 2) Universal product barcode -> auto-pick first IN_STOCK piece
 ipcMain.handle('inventory-bill-scan', async (event, barcode) => {
   try {
+    const barcodeVal = (barcode || '').trim().toUpperCase();
+    if (!barcodeVal) return { success: false, error: 'Barcode cannot be empty' };
+
+    // 1. Check if it's a serial inventory item barcode
     const item = db.prepare(`
       SELECT ii.*, p.name as product_name, p.brand, p.selling_price as product_selling_price,
              p.gst_percent as product_gst
       FROM inventory_items ii
       JOIN products p ON ii.product_id = p.id
       WHERE ii.barcode = ?
-    `).get(barcode);
+    `).get(barcodeVal);
 
-    if (!item) {
-      return { success: true, found: false, barcode };
+    if (item) {
+      if (item.status !== 'IN_STOCK') {
+        return { success: true, found: true, available: false, item, reason: `Item status is "${item.status}". Only IN_STOCK items can be billed.` };
+      }
+      return { success: true, found: true, available: true, item };
     }
 
-    if (item.status !== 'IN_STOCK') {
-      return { success: true, found: true, available: false, item, reason: `Item status is "${item.status}". Only IN_STOCK items can be billed.` };
+    // 2. Check universal product_barcodes mapping
+    const mapping = db.prepare('SELECT * FROM product_barcodes WHERE barcode = ?').get(barcodeVal);
+    if (mapping) {
+      const product = db.prepare('SELECT * FROM products WHERE id = ?').get(mapping.product_id);
+      if (!product) return { success: true, found: false, barcode: barcodeVal };
+
+      // Auto-pick the first IN_STOCK serial piece for this product
+      const stockPiece = db.prepare(`
+        SELECT ii.*, p.name as product_name, p.brand, p.selling_price as product_selling_price,
+               p.gst_percent as product_gst
+        FROM inventory_items ii
+        JOIN products p ON ii.product_id = p.id
+        WHERE ii.product_id = ? AND ii.status = 'IN_STOCK'
+        ORDER BY ii.created_at ASC LIMIT 1
+      `).get(mapping.product_id);
+
+      if (!stockPiece) {
+        return {
+          success: true, found: true, available: false, barcode: barcodeVal,
+          reason: `Product "${product.name}" is out of stock (0 items available).`,
+          product
+        };
+      }
+      return { success: true, found: true, available: true, item: stockPiece, scannedAsUniversal: true, universalBarcode: barcodeVal };
     }
 
-    return { success: true, found: true, available: true, item };
+    // 3. Not found anywhere
+    return { success: true, found: false, barcode: barcodeVal };
   } catch (error) {
     console.error('[Inventory] Error validating barcode for billing:', error);
     return { success: false, error: error.message };
   }
 });
+
 
 // Mark items as SOLD when invoice is completed
 ipcMain.handle('inventory-mark-sold', async (event, data) => {

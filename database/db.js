@@ -304,4 +304,20 @@ try {
   db.exec("ALTER TABLE recordings ADD COLUMN invoice_id INTEGER");
 } catch (e) { }
 
+// ─── Universal Product Barcodes ──────────────────────────────
+// Maps a manufacturer/universal barcode (UPC/EAN/QR) to a product master.
+// This is separate from inventory_items.barcode which tracks individual physical pieces.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS product_barcodes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    barcode TEXT NOT NULL UNIQUE,
+    product_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_product_barcodes_barcode ON product_barcodes(barcode);
+  CREATE INDEX IF NOT EXISTS idx_product_barcodes_product ON product_barcodes(product_id);
+`);
+
 module.exports = db;

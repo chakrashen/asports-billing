@@ -90,6 +90,10 @@ contextBridge.exposeInMainWorld('api', {
   inventoryReturnItem: (data) => ipcRenderer.invoke('inventory-return-item', data),
   inventoryPurchaseScan: (data) => ipcRenderer.invoke('inventory-purchase-scan', data),
   inventoryPurchaseBulk: (data) => ipcRenderer.invoke('inventory-bulk-add', data),
+  // ── Universal Barcode Mapping APIs ─────────────────────────
+  inventorySetProductBarcode: (data) => ipcRenderer.invoke('inventory-set-product-barcode', data),
+  inventoryLookupBarcode: (barcode) => ipcRenderer.invoke('inventory-lookup-barcode', barcode),
+
   // ── Camera & CCTV Recording APIs ────────────────────────────
   cctvGetCameras: () => ipcRenderer.invoke('cctv-get-cameras'),
   cctvSaveCamera: (data) => ipcRenderer.invoke('cctv-save-camera', data),

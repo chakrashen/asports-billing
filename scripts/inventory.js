@@ -246,7 +246,12 @@ function closeModal(id) { document.getElementById(id).classList.remove('show'); 
 document.getElementById('btn-add-product').addEventListener('click', () => {
   document.getElementById('mp-id').value = '';
   document.getElementById('modal-product-title').textContent = 'Add Product';
-  ['mp-name', 'mp-brand', 'mp-category', 'mp-prefix', 'mp-purchase', 'mp-selling', 'mp-gst', 'mp-desc'].forEach(id => document.getElementById(id).value = '');
+  ['mp-name', 'mp-brand', 'mp-category', 'mp-prefix', 'mp-purchase', 'mp-selling', 'mp-gst', 'mp-desc', 'mp-universal-barcode'].forEach(id => document.getElementById(id).value = '');
+  // Reset barcode status indicator
+  const status = document.getElementById('mp-barcode-status');
+  if (status) { status.style.display = 'none'; status.textContent = ''; }
+  const clearBtn = document.getElementById('mp-clear-barcode');
+  if (clearBtn) clearBtn.style.display = 'none';
   openModal('modal-product');
 });
 
@@ -265,7 +270,8 @@ document.getElementById('mp-save').addEventListener('click', async () => {
     purchasePrice: parseFloat(document.getElementById('mp-purchase').value) || 0,
     sellingPrice: parseFloat(document.getElementById('mp-selling').value) || 0,
     gstPercent: parseFloat(document.getElementById('mp-gst').value) || 0,
-    description: document.getElementById('mp-desc').value.trim()
+    description: document.getElementById('mp-desc').value.trim(),
+    universalBarcode: (document.getElementById('mp-universal-barcode')?.value || '').trim().toUpperCase() || undefined
   };
 
   const editId = document.getElementById('mp-id').value;
@@ -277,7 +283,8 @@ document.getElementById('mp-save').addEventListener('click', async () => {
   }
 
   if (result.success) {
-    showToast(editId ? 'Product updated' : 'Product created');
+    if (result.barcodeWarning) showToast(result.barcodeWarning, true);
+    else showToast(editId ? 'Product updated' : 'Product created');
     closeModal('modal-product');
     loadProducts();
   } else {
@@ -298,6 +305,21 @@ window.editProduct = function (id) {
   document.getElementById('mp-selling').value = p.selling_price || '';
   document.getElementById('mp-gst').value = p.gst_percent || '';
   document.getElementById('mp-desc').value = p.description || '';
+  // Load universal barcode if present
+  const ubInput = document.getElementById('mp-universal-barcode');
+  if (ubInput) {
+    ubInput.value = p.universal_barcode || '';
+    const clearBtn = document.getElementById('mp-clear-barcode');
+    if (clearBtn) clearBtn.style.display = p.universal_barcode ? 'block' : 'none';
+    const statusEl = document.getElementById('mp-barcode-status');
+    if (statusEl && p.universal_barcode) {
+      statusEl.style.display = 'block';
+      statusEl.style.color = 'var(--accent-emerald)';
+      statusEl.textContent = `✓ Mapped: ${p.universal_barcode}`;
+    } else if (statusEl) {
+      statusEl.style.display = 'none';
+    }
+  }
   openModal('modal-product');
 };
 
@@ -571,6 +593,7 @@ document.getElementById('mb-save').addEventListener('click', async () => {
 
 const barcodeInput = document.getElementById('barcode-input');
 let scanTimeout;
+let lastScannedBarcode = null;
 
 barcodeInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
@@ -580,24 +603,29 @@ barcodeInput.addEventListener('keydown', (e) => {
   }
 });
 
-// Also handle rapid scanner input (characters typed very fast)
+// Handle rapid scanner input (USB scanners type fast + send Enter)
 barcodeInput.addEventListener('input', () => {
   clearTimeout(scanTimeout);
-  scanTimeout = setTimeout(() => {
-    // If the input ends with a newline character from scanner, auto-search
-    const val = barcodeInput.value.trim();
-    if (val.length >= 4) {
-      // Don't auto-scan, wait for Enter
-    }
-  }, 100);
+  const val = barcodeInput.value.trim();
+  if (val.length >= 4) {
+    // Don't auto-scan; wait for Enter key from scanner
+  }
 });
 
 async function performScan(barcode) {
+  const barcodeVal = barcode.trim().toUpperCase();
+  if (!barcodeVal) return;
+  // Prevent duplicate scans in quick succession
+  if (barcodeVal === lastScannedBarcode) return;
+  lastScannedBarcode = barcodeVal;
+  setTimeout(() => { lastScannedBarcode = null; }, 1500);
+
   const resultDiv = document.getElementById('scan-result');
   resultDiv.style.display = 'block';
   resultDiv.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);"><span class="material-icons-round" style="font-size:32px;animation:pulse-glow 1s ease-in-out infinite;">search</span><p>Searching...</p></div>';
 
-  const result = await window.api.inventoryScanBarcode(barcode);
+  // Use inventoryLookupBarcode which checks both universal and serial barcodes
+  const result = await window.api.inventoryLookupBarcode(barcodeVal);
 
   if (!result.success) {
     resultDiv.innerHTML = `<div class="scan-not-found"><span class="material-icons-round">error</span><h3>Error</h3><p>${esc(result.error)}</p></div>`;
@@ -609,31 +637,87 @@ async function performScan(barcode) {
       <div class="scan-not-found">
         <span class="material-icons-round">help_outline</span>
         <h3>Barcode Not Found</h3>
-        <p>"<strong>${esc(barcode)}</strong>" does not exist in inventory.</p>
-        <button class="btn btn--primary" style="margin-top:16px;" onclick="goAddItemWithBarcode('${esc(barcode)}')">
-          <span class="material-icons-round">add</span> Add to Inventory
-        </button>
+        <p>"<strong>${esc(barcodeVal)}</strong>" is not assigned to any product.</p>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-top:8px;">You can assign this barcode while adding or editing a product.</p>
+        <div style="display:flex;gap:12px;justify-content:center;margin-top:16px;flex-wrap:wrap;">
+          <button class="btn btn--primary" onclick="goAddProductWithBarcode('${esc(barcodeVal)}')">
+            <span class="material-icons-round">add</span> Create New Product
+          </button>
+          <button class="btn btn--secondary" onclick="goAddItemWithBarcode('${esc(barcodeVal)}')">
+            <span class="material-icons-round">inventory_2</span> Add as Serial Item
+          </button>
+        </div>
       </div>
     `;
     return;
   }
 
+  // ── UNIVERSAL BARCODE (product-level lookup) ───────────────
+  if (result.source === 'universal') {
+    const p = result.product;
+    const stockStatus = p.in_stock > 0
+      ? `<span class="status-badge status-badge--in_stock">${p.in_stock} In Stock</span>`
+      : `<span class="status-badge status-badge--sold">Out of Stock</span>`;
+
+    resultDiv.innerHTML = `
+      <div class="scan-card">
+        <div class="scan-card__header">
+          <div>
+            <div class="scan-card__title">${esc(p.name)}</div>
+            <div class="scan-card__barcode" style="display:flex;align-items:center;gap:6px;">
+              <span class="material-icons-round" style="font-size:14px;color:var(--accent-cyan);">qr_code_scanner</span>
+              ${esc(barcodeVal)} <span style="font-size:0.7rem;color:var(--accent-cyan);background:rgba(0,229,255,0.1);padding:2px 8px;border-radius:4px;margin-left:4px;">Universal</span>
+            </div>
+          </div>
+          <div>${stockStatus}</div>
+        </div>
+        <div class="scan-info-grid">
+          <div class="scan-info"><div class="scan-info__label">Brand</div><div class="scan-info__value">${esc(p.brand || '—')}</div></div>
+          <div class="scan-info"><div class="scan-info__label">Category</div><div class="scan-info__value">${esc(p.category || '—')}</div></div>
+          <div class="scan-info"><div class="scan-info__label">Purchase Price</div><div class="scan-info__value">₹${fmt(p.purchase_price)}</div></div>
+          <div class="scan-info"><div class="scan-info__label">Selling Price</div><div class="scan-info__value">₹${fmt(p.selling_price)}</div></div>
+          <div class="scan-info"><div class="scan-info__label">GST %</div><div class="scan-info__value">${p.gst_percent || 0}%</div></div>
+          <div class="scan-info"><div class="scan-info__label">In Stock</div><div class="scan-info__value" style="color:${p.in_stock > 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">${p.in_stock} units</div></div>
+          <div class="scan-info"><div class="scan-info__label">Total Items</div><div class="scan-info__value">${p.total_items}</div></div>
+          <div class="scan-info"><div class="scan-info__label">Sold</div><div class="scan-info__value">${p.sold}</div></div>
+        </div>
+        ${p.description ? `<div style="margin-top:12px;padding:10px;background:var(--bg-input);border-radius:var(--radius-sm);font-size:0.85rem;color:var(--text-secondary);"><strong>Description:</strong> ${esc(p.description)}</div>` : ''}
+        <div class="scan-actions" style="margin-top:16px;">
+          <button class="btn btn--secondary" onclick="viewProductDetail(${p.id})">
+            <span class="material-icons-round">visibility</span> View Product
+          </button>
+          <button class="btn btn--secondary" onclick="editProduct(${p.id}); document.querySelector('.modal-overlay.show') && closeModal('modal-product') || openModal('modal-product')">
+            <span class="material-icons-round">edit</span> Edit / Update Barcode
+          </button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // ── SERIAL ITEM BARCODE (individual item lookup) ───────────
   const item = result.item;
-  const movements = result.movements || [];
-  const inv = result.invoiceInfo;
+  const p = result.product;
+  const movements = (await window.api.inventoryScanBarcode(item.barcode)).movements || [];
+  const inv = (await window.api.inventoryScanBarcode(item.barcode)).invoiceInfo;
 
   resultDiv.innerHTML = `
     <div class="scan-card">
       <div class="scan-card__header">
         <div class="scan-card__title">${esc(item.product_name)}</div>
-        <div class="scan-card__barcode">${esc(item.barcode)}</div>
+        <div class="scan-card__barcode" style="display:flex;align-items:center;gap:6px;">
+          <span class="material-icons-round" style="font-size:14px;color:var(--text-muted);">qr_code_2</span>
+          ${esc(item.barcode)} <span style="font-size:0.7rem;color:var(--text-muted);background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:4px;margin-left:4px;">Serial</span>
+        </div>
       </div>
       <div class="scan-info-grid">
         <div class="scan-info"><div class="scan-info__label">Status</div><div class="scan-info__value"><span class="status-badge status-badge--${item.status.toLowerCase()}">${item.status.replace('_', ' ')}</span></div></div>
-        <div class="scan-info"><div class="scan-info__label">Brand</div><div class="scan-info__value">${esc(item.brand || '—')}</div></div>
-        <div class="scan-info"><div class="scan-info__label">Category</div><div class="scan-info__value">${esc(item.category || '—')}</div></div>
+        <div class="scan-info"><div class="scan-info__label">Brand</div><div class="scan-info__value">${esc(item.brand || p.brand || '—')}</div></div>
+        <div class="scan-info"><div class="scan-info__label">Category</div><div class="scan-info__value">${esc(item.category || p.category || '—')}</div></div>
         <div class="scan-info"><div class="scan-info__label">Purchase Price</div><div class="scan-info__value">₹${fmt(item.purchase_price)}</div></div>
         <div class="scan-info"><div class="scan-info__label">Selling Price</div><div class="scan-info__value">₹${fmt(item.selling_price)}</div></div>
+        <div class="scan-info"><div class="scan-info__label">GST %</div><div class="scan-info__value">${p.gst_percent || 0}%</div></div>
+        <div class="scan-info"><div class="scan-info__label">In Stock (Product)</div><div class="scan-info__value">${p.in_stock} units</div></div>
         <div class="scan-info"><div class="scan-info__label">Purchase Date</div><div class="scan-info__value">${fmtDate(item.purchase_date)}</div></div>
         <div class="scan-info"><div class="scan-info__label">Sale Date</div><div class="scan-info__value">${fmtDate(item.sale_date)}</div></div>
         ${inv ? `<div class="scan-info"><div class="scan-info__label">Invoice</div><div class="scan-info__value">#${inv.invoice_number} — ${esc(inv.customer_name)}</div></div>` : ''}
@@ -675,6 +759,22 @@ window.goAddItemWithBarcode = function (barcode) {
   }, 200);
 };
 
+window.goAddProductWithBarcode = function (barcode) {
+  document.querySelector('[data-tab="products"]').click();
+  setTimeout(() => {
+    document.getElementById('mp-id').value = '';
+    document.getElementById('modal-product-title').textContent = 'Add Product';
+    ['mp-name', 'mp-brand', 'mp-category', 'mp-prefix', 'mp-purchase', 'mp-selling', 'mp-gst', 'mp-desc'].forEach(id => document.getElementById(id).value = '');
+    const ubInput = document.getElementById('mp-universal-barcode');
+    if (ubInput) ubInput.value = barcode;
+    const statusEl = document.getElementById('mp-barcode-status');
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.style.color = 'var(--accent-cyan)'; statusEl.textContent = `Barcode "${barcode}" will be mapped on save`; }
+    const clearBtn = document.getElementById('mp-clear-barcode');
+    if (clearBtn) clearBtn.style.display = 'block';
+    openModal('modal-product');
+  }, 200);
+};
+
 window.scanReturn = async function (barcode) {
   const remarks = prompt('Return reason:');
   if (remarks === null) return;
@@ -698,6 +798,50 @@ window.scanLost = async function (barcode) {
   if (result.success) { showToast('Item marked as lost'); performScan(barcode); }
   else showToast(result.error, true);
 };
+
+// ── Universal Barcode Input Handlers (Product Modal) ─────────
+
+(function setupUniversalBarcodeHandlers() {
+  const ubInput = document.getElementById('mp-universal-barcode');
+  const clearBtn = document.getElementById('mp-clear-barcode');
+  const statusEl = document.getElementById('mp-barcode-status');
+  if (!ubInput) return;
+
+  // Handle scanner Enter key in product modal
+  ubInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = ubInput.value.trim().toUpperCase();
+      if (val) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = 'var(--accent-cyan)';
+        statusEl.textContent = `Barcode "${val}" will be saved on product save`;
+        clearBtn.style.display = 'block';
+      }
+    }
+  });
+
+  // Show/hide clear button and status as user types
+  ubInput.addEventListener('input', () => {
+    const val = ubInput.value.trim();
+    clearBtn.style.display = val ? 'block' : 'none';
+    if (!val) {
+      statusEl.style.display = 'none';
+    }
+  });
+
+  // Clear button
+  clearBtn.addEventListener('click', () => {
+    ubInput.value = '';
+    clearBtn.style.display = 'none';
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--text-muted)';
+    statusEl.textContent = 'Barcode cleared. Save product to remove mapping.';
+    ubInput.focus();
+  });
+})();
+
+
 
 // ═══════════════════════════════════════════════════════════
 // ─── MODAL ESCAPE KEY HANDLING ────────────────────────────

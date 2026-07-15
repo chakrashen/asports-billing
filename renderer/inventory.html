@@ -202,6 +202,22 @@
           <div class="form-group"><label class="form-label">Category</label><input type="text" id="mp-category" class="form-input" placeholder="e.g. Football"></div>
           <div class="form-group"><label class="form-label">Barcode Prefix</label><input type="text" id="mp-prefix" class="form-input" placeholder="e.g. FB"></div>
         </div>
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <span class="material-icons-round" style="font-size:16px;color:var(--accent-cyan);">qr_code_scanner</span>
+            Universal Barcode
+            <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(EAN/UPC/QR — scan or type)</span>
+          </label>
+          <div style="position:relative;">
+            <input type="text" id="mp-universal-barcode" class="form-input" placeholder="Scan barcode or type and press Enter" autocomplete="off" spellcheck="false"
+              style="padding-right: 40px;">
+            <button type="button" id="mp-clear-barcode" title="Clear barcode" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;display:none;padding:4px;">
+              <span class="material-icons-round" style="font-size:18px;">close</span>
+            </button>
+          </div>
+          <p id="mp-barcode-status" style="font-size:0.75rem;margin-top:4px;display:none;"></p>
+        </div>
+
         <div class="modal__row modal__row--3">
           <div class="form-group"><label class="form-label">Purchase Price ₹</label><input type="number" id="mp-purchase" class="form-input" placeholder="0" step="0.01"></div>
           <div class="form-group"><label class="form-label">Selling Price ₹</label><input type="number" id="mp-selling" class="form-input" placeholder="0" step="0.01"></div>
