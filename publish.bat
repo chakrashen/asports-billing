@@ -25,6 +25,7 @@ echo.
 :: Build and publish to GitHub Releases
 echo [2/3] Building and publishing to GitHub...
 echo       This may take a few minutes...
+for /f "tokens=2 delims==" %%a in ('findstr /b /i "GH_TOKEN=" .env') do set GH_TOKEN=%%a
 call npx electron-builder --win --publish always
 if errorlevel 1 (
     echo ERROR: Build/publish failed
