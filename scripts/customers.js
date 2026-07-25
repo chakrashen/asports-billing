@@ -196,13 +196,19 @@ function renderInvoices(invoices) {
 
   container.innerHTML = `
     <div class="invoice-directory-table" style="width:100%; background: rgba(18, 20, 45, 0.4); border-radius: 16px; border: 1px solid var(--border-subtle); overflow: visible;">
-      <div class="table-header" style="display: grid; grid-template-columns: 140px 1fr 85px 40px 120px 140px 80px; padding: 18px 24px; background: #0d0d21; border-bottom: 1px solid var(--border-subtle); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 10; border-radius: 16px 16px 0 0;">
+      <div class="table-header" style="display: grid; grid-template-columns: 130px 1fr 85px 40px 110px 150px 130px 70px; padding: 18px 24px; background: #0d0d21; border-bottom: 1px solid var(--border-subtle); font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 10; border-radius: 16px 16px 0 0;">
         <div>Invoice No.</div>
         <div>Customer Name</div>
         <div style="text-align: center;">Source</div>
         <div style="text-align: center;">QR</div>
         <div style="text-align: right;">Amount</div>
         <div style="text-align: center;">Action</div>
+        <div style="text-align: center;">
+          <span style="display:inline-flex;align-items:center;gap:4px;">
+            <span class="material-icons-round" style="font-size:14px;color:var(--accent-emerald);">videocam</span>
+            Camera
+          </span>
+        </div>
         <div style="text-align: center;">Delete</div>
       </div>
       <div id="invoice-rows-container">
@@ -212,7 +218,7 @@ function renderInvoices(invoices) {
     const isShopify = shopifySyncedIds.has(inv.id);
     const shopifyBadge = isShopify ? `<span style="display:inline-flex;align-items:center;gap:3px;background:rgba(150,191,72,0.15);color:#96bf48;border:1px solid rgba(150,191,72,0.3);padding:2px 8px;border-radius:6px;font-size:0.65rem;font-weight:800;letter-spacing:0.03em;margin-right:8px;vertical-align:middle;"><svg width="12" height="12" viewBox="0 0 256 292" style="flex-shrink:0;"><path d="M223.8 57.5s-4.9-1.3-16.2 3.3c-5.4-15.4-14.9-29.6-31.6-29.6h-1.5c-4.7-6.1-10.6-8.8-15.7-8.8-38.8 0-57.5 48.5-63.3 73.2l-27.2 8.4c-8.5 2.7-8.8 2.9-9.9 10.9L42 241.7 168 268l72.5-15.6S223.9 57.8 223.8 57.5z" fill="#96bf48"/></svg>Shopify</span>` : '';
     return `
-            <div class="invoice-directory-row" style="display: grid; grid-template-columns: 140px 1fr 85px 40px 120px 140px 80px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center; transition: background 0.2s ease;">
+            <div class="invoice-directory-row" style="display: grid; grid-template-columns: 130px 1fr 85px 40px 110px 150px 130px 70px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center; transition: background 0.2s ease;">
               <div style="font-weight: 800; color: var(--accent-cyan); font-family: 'Outfit', sans-serif;">${invNum}</div>
               <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(inv.customer_name)}</div>
               <div style="text-align: center;">${shopifyBadge}</div>
@@ -229,6 +235,24 @@ function renderInvoices(invoices) {
                 </button>
               </div>
               <div style="text-align: center;">
+                <!-- ── Camera Manager: Per-row recording button ── -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+                  <button
+                    id="rec-btn-${inv.id}"
+                    class="row-rec-btn"
+                    onclick="handleRecordBtn(${inv.id}, '${escapeHtml(inv.customer_name).replace(/'/g,"&apos;")}', '${invNum}')"
+                    title="Start Recording for this invoice">
+                    <span class="material-icons-round">fiber_manual_record</span>
+                    Start Recording
+                  </button>
+                  <div class="row-rec-indicator" id="rec-indicator-${inv.id}">
+                    <div class="rec-dot"></div>
+                    REC
+                  </div>
+                  <span id="rec-badge-${inv.id}" style="display:none;font-size:0.6rem;color:var(--accent-purple);background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);border-radius:4px;padding:1px 6px;">HAS VIDEO</span>
+                </div>
+              </div>
+              <div style="text-align: center;">
                 <button onclick="handleDeleteInvoice(${inv.id})" style="background: rgba(244, 63, 94, 0.1); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.2); padding: 8px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease;" onmouseover="this.style.background='var(--accent-rose)'; this.style.color='#fff'" onmouseout="this.style.background='rgba(244, 63, 94, 0.1)'; this.style.color='var(--accent-rose)'">
                   <span class="material-icons-round" style="font-size: 18px;">delete_outline</span>
                 </button>
@@ -239,6 +263,15 @@ function renderInvoices(invoices) {
       </div>
     </div>
   `;
+
+  // After rendering, check each invoice for existing recordings and show badges
+  setTimeout(() => {
+    invoices.forEach(inv => {
+      if (window.CameraManager) {
+        CameraManager.refreshRowRecordingIndicator(inv.id);
+      }
+    });
+  }, 300);
 }
 
 async function handleDeleteInvoice(invoiceId) {
@@ -518,6 +551,131 @@ function openCustomerDetailModal(cust) {
   // Ensure we're in view mode
   setDetailMode('view');
   overlay.classList.add('show');
+
+  // ── Populate Live Camera & Recordings section ──────────────
+  populateDetailCameraSection(cust);
+}
+
+/**
+ * Loads and displays all camera recordings for a customer
+ * inside the Customer Detail modal's Live Camera section.
+ * This is non-blocking and fails silently if the API is unavailable.
+ */
+async function populateDetailCameraSection(cust) {
+  const listEl = document.getElementById('detail-recordings-list');
+  const openCamBtn = document.getElementById('detail-open-camera-btn');
+  const openFolderBtn = document.getElementById('detail-open-recordings-btn');
+
+  if (!listEl) return;
+
+  // Wire camera button
+  if (openCamBtn) {
+    openCamBtn.onclick = () => {
+      if (typeof CameraManager !== 'undefined') {
+        // Close the detail modal so the camera panel is visible
+        closeDetailModal();
+        setTimeout(() => CameraManager.openPanel(), 200);
+      }
+    };
+  }
+
+  // Wire recordings folder button
+  if (openFolderBtn) {
+    openFolderBtn.onclick = () => {
+      if (window.api && window.api.recordingOpenFolder) {
+        window.api.recordingOpenFolder();
+      }
+    };
+  }
+
+  // Load recordings for this customer
+  listEl.innerHTML = `
+    <p style="color: var(--text-muted); font-size: 0.82rem; display: flex; align-items: center; gap: 6px;">
+      <span class="material-icons-round" style="font-size:16px;">hourglass_top</span>
+      Loading recordings...
+    </p>
+  `;
+
+  try {
+    if (!window.api || !window.api.customerRecordingsGet) {
+      listEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">Recording history unavailable.</p>';
+      return;
+    }
+
+    const result = await window.api.customerRecordingsGet(cust.name);
+
+    if (!result.success || !result.recordings || result.recordings.length === 0) {
+      listEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 0;color:var(--text-muted);font-size:0.8rem;">
+          <span class="material-icons-round" style="font-size:18px;opacity:0.4;">videocam_off</span>
+          No recordings yet. Use the camera panel to record a session.
+        </div>
+      `;
+      return;
+    }
+
+    const recordings = result.recordings;
+    listEl.innerHTML = recordings.map(rec => {
+      const date = rec.created_at ? new Date(rec.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+      const duration = rec.duration_seconds ? formatTime(rec.duration_seconds) : '—';
+      const mb = rec.file_size ? (rec.file_size / (1024 * 1024)).toFixed(1) + ' MB' : '—';
+      const invNum = rec.invoice_number ? `#${rec.invoice_number}` : (rec.invoice_id ? `#${rec.invoice_id}` : '—');
+      const sourceIcon = rec.source_type === 'WEBCAM' ? 'photo_camera' : 'linked_camera';
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;margin-bottom:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;gap:10px;">
+          <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+            <span class="material-icons-round" style="font-size:20px;color:var(--accent-emerald);flex-shrink:0;">${sourceIcon}</span>
+            <div style="min-width:0;">
+              <div style="font-size:0.8rem;font-weight:700;color:var(--text-primary);">Invoice ${invNum}</div>
+              <div style="font-size:0.7rem;color:var(--text-muted);">${date} &nbsp;·&nbsp; ${duration} &nbsp;·&nbsp; ${mb}</div>
+            </div>
+          </div>
+          <button
+            onclick="playCustomerRecording('${rec.file_path ? rec.file_path.replace(/\\/g,'\\\\').replace(/'/g,"\\'") : ''}')"
+            style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;border:1px solid rgba(0,229,255,0.2);background:rgba(0,229,255,0.08);color:var(--accent-cyan);font-size:0.75rem;font-weight:700;cursor:pointer;transition:all 0.2s;"
+            onmouseover="this.style.background='rgba(0,229,255,0.15)'"
+            onmouseout="this.style.background='rgba(0,229,255,0.08)'"
+            title="Play this recording">
+            <span class="material-icons-round" style="font-size:16px;">play_circle</span>
+            Play
+          </button>
+        </div>
+      `;
+    }).join('');
+
+  } catch (err) {
+    console.error('[CustomerDetail] Camera section error:', err);
+    listEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">Could not load recordings.</p>';
+  }
+}
+
+/** Helper used by the recordings list Play button */
+function playCustomerRecording(filePath) {
+  if (!filePath) {
+    alert('Recording file path is missing.');
+    return;
+  }
+  window.api.recordingReadFile(filePath).then(fileResult => {
+    if (fileResult && fileResult.success) {
+      const videoEl = document.getElementById('player-video');
+      videoEl.src = `data:${fileResult.mime};base64,${fileResult.data}`;
+      document.getElementById('player-title').textContent = 'Customer Recording';
+      document.getElementById('player-overlay').classList.add('show');
+      videoEl.play();
+    } else {
+      alert('Could not load recording. The file may have been moved or deleted.');
+    }
+  }).catch(err => {
+    alert('Error loading recording: ' + err.message);
+  });
+}
+
+/** Formats seconds to HH:MM:SS (reuse from camera_manager if available) */
+function formatTime(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
 function setDetailMode(mode) {
@@ -1145,6 +1303,32 @@ document.getElementById('btn-mark-paid').addEventListener('click', async () => {
 
 // ─── Init ───────────────────────────────────────────────────
 loadCustomers();
+
+// Initialize Camera Manager module
+if (typeof CameraManager !== 'undefined') {
+  CameraManager.init();
+}
+
+// ─── Camera Recording Helpers ───────────────────────────────
+/**
+ * Called by the per-row Start/Stop recording button.
+ * Delegates to CameraManager which handles all camera/recording logic.
+ */
+function handleRecordBtn(invoiceId, customerName, invoiceDisplay) {
+  if (typeof CameraManager === 'undefined') {
+    alert('Camera Manager module not loaded. Please refresh the page.');
+    return;
+  }
+  if (CameraManager.isRecording() && CameraManager.getActiveInvoiceId() === invoiceId) {
+    // Already recording this invoice — stop it
+    CameraManager.stopRecordingForInvoice(invoiceId);
+  } else {
+    // Start recording for this invoice
+    // Automatically open the panel if not already open
+    CameraManager.openPanel();
+    CameraManager.startRecordingForInvoice(invoiceId, customerName, invoiceDisplay);
+  }
+}
 
 // Auto-refresh when Shopify orders are synced or updated
 if (window.api.onShopifyOrdersSynced) {

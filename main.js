@@ -4778,6 +4778,26 @@ ipcMain.handle('recording-get-all-by-invoice', async (event, invoiceId) => {
   }
 });
 
+// ─── Customer Recordings (Camera Manager) ──────────────────────
+// Fetches all recordings associated with any invoice belonging to a customer name.
+ipcMain.handle('customer-recordings-get', async (event, customerName) => {
+  try {
+    // Join recordings → sales_invoices to find recordings by customer name
+    const recordings = db.prepare(
+      `SELECT r.*, si.customer_name, si.invoice_number
+       FROM recordings r
+       INNER JOIN sales_invoices si ON r.invoice_id = si.id
+       WHERE LOWER(si.customer_name) = LOWER(?)
+         AND r.status != 'DELETED'
+       ORDER BY r.created_at DESC`
+    ).all(customerName);
+    return { success: true, recordings };
+  } catch (error) {
+    console.error('Error fetching customer recordings:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('recording-get-all', async () => {
   try {
     const recordings = db.prepare(

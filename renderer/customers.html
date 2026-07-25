@@ -7,6 +7,7 @@
   <title>Customer Directory — ASPORTS ZONE</title>
   <link rel="stylesheet" href="../styles/global.css">
   <link rel="stylesheet" href="../styles/customers.css">
+  <link rel="stylesheet" href="../styles/camera_manager.css">
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap"
     rel="stylesheet">
@@ -660,6 +661,42 @@
             </div>
           </div>
         </div>
+
+        <!-- ── Live Camera Section (Camera Manager) ── -->
+        <div class="detail-section" id="detail-camera-section">
+          <div class="detail-section__title">
+            <span class="material-icons-round" style="color: var(--accent-emerald);">videocam</span>
+            Live Camera &amp; Recordings
+          </div>
+
+          <!-- Camera action row -->
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px;">
+            <button id="detail-open-camera-btn"
+              style="display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:10px;border:1px solid rgba(52,211,153,0.3);background:rgba(52,211,153,0.08);color:var(--accent-emerald);font-size:0.85rem;font-weight:700;cursor:pointer;transition:all 0.2s ease;"
+              onmouseover="this.style.background='rgba(52,211,153,0.16)'"
+              onmouseout="this.style.background='rgba(52,211,153,0.08)'"
+              title="Open the live camera panel">
+              <span class="material-icons-round" style="font-size:18px;">videocam</span>
+              Open Live Camera
+            </button>
+            <button id="detail-open-recordings-btn"
+              style="display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:10px;border:1px solid rgba(168,85,247,0.25);background:rgba(168,85,247,0.08);color:var(--accent-purple);font-size:0.85rem;font-weight:700;cursor:pointer;transition:all 0.2s ease;"
+              onmouseover="this.style.background='rgba(168,85,247,0.15)'"
+              onmouseout="this.style.background='rgba(168,85,247,0.08)'"
+              title="Open recordings folder">
+              <span class="material-icons-round" style="font-size:18px;">folder_open</span>
+              Open Recordings Folder
+            </button>
+          </div>
+
+          <!-- Customer recordings list (populated by JS) -->
+          <div id="detail-recordings-list">
+            <p style="color: var(--text-muted); font-size: 0.82rem; display: flex; align-items: center; gap: 6px;">
+              <span class="material-icons-round" style="font-size:16px;">hourglass_top</span>
+              Loading recordings...
+            </p>
+          </div>
+        </div>
       </div>
 
       <!-- EDIT MODE -->
@@ -788,6 +825,7 @@
     </div>
   </div>
 
+  <script src="../scripts/camera_manager.js"></script>
   <script src="../scripts/customers.js"></script>
 </body>
 

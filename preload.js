@@ -114,6 +114,7 @@ contextBridge.exposeInMainWorld('api', {
   recordingReadFile: (filePath) => ipcRenderer.invoke('recording-read-file', filePath),
   recordingGetByInvoice: (invoiceId) => ipcRenderer.invoke('recording-get-by-invoice', invoiceId),
   recordingGetAllByInvoice: (invoiceId) => ipcRenderer.invoke('recording-get-all-by-invoice', invoiceId),
+  customerRecordingsGet: (customerName) => ipcRenderer.invoke('customer-recordings-get', customerName),
   // Wireless Phone APIs
   wirelessStartServer: () => ipcRenderer.invoke('wireless-start-server'),
   wirelessStopServer: () => ipcRenderer.invoke('wireless-stop-server'),
